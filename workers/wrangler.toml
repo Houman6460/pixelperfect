@@ -12,7 +12,7 @@ CORS_ORIGIN = "https://pixelperfect.pages.dev"
 [[d1_databases]]
 binding = "DB"
 database_name = "pixelperfect-db"
-database_id = "YOUR_D1_DATABASE_ID"  # Will be replaced after creation
+database_id = "483f81a8-108d-4a2f-a1fb-73bf57d90e17"
 
 # R2 Storage binding for media files
 [[r2_buckets]]
@@ -22,11 +22,11 @@ bucket_name = "pixelperfect-media"
 # KV Namespace for sessions and caching
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "YOUR_KV_NAMESPACE_ID"  # Will be replaced after creation
+id = "04985c96cff94bd69d5835b7f1f99140"
 
 [[kv_namespaces]]
 binding = "CACHE"
-id = "YOUR_CACHE_KV_ID"  # Will be replaced after creation
+id = "c61d1619460a48498a142b40fa2fecdd"
 
 # Development settings
 [dev]
