@@ -1,0 +1,281 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased;
+}
+
+/* Marquee animations for provider logos */
+@keyframes marquee-slow {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes marquee-slow-reverse {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-marquee-slow {
+  animation: marquee-slow 40s linear infinite;
+}
+
+.animate-marquee-slow-reverse {
+  animation: marquee-slow-reverse 40s linear infinite;
+}
+
+/* Pause animation on hover */
+.animate-marquee-slow:hover,
+.animate-marquee-slow-reverse:hover {
+  animation-play-state: paused;
+}
+
+/* Hide marquee on mobile, show static grid */
+@media (max-width: 767px) {
+  .animate-marquee-slow,
+  .animate-marquee-slow-reverse {
+    display: none;
+  }
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom breakpoint for extra small screens */
+@media (min-width: 480px) {
+  .xs\:inline {
+    display: inline !important;
+  }
+}
+
+/* Animated gradient border effect for Professional pricing card */
+@keyframes gradient-border {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-border {
+  background-size: 300% 300%;
+  animation: gradient-border 3s ease infinite;
+}
+
+/* Alternative: Rotating border glow effect */
+@keyframes rotate-glow {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Shimmer/shine effect for cards */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(168, 85, 247, 0.4),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* ==================== HERO BACKGROUND ANIMATIONS ==================== */
+
+/* Blob animation for mesh gradient background */
+@keyframes blob {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(20px, -30px) scale(1.1);
+  }
+  50% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  75% {
+    transform: translate(30px, 10px) scale(1.05);
+  }
+}
+
+.animate-blob {
+  animation: blob 8s ease-in-out infinite;
+}
+
+/* Animation delays */
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+.animation-delay-6000 {
+  animation-delay: 6s;
+}
+
+/* Slow pulse for center orb */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 0.2;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 6s ease-in-out infinite;
+}
+
+/* Animated gradient text */
+@keyframes gradient-text {
+  0%, 100% {
+    background-size: 200% 200%;
+    background-position: left center;
+  }
+  50% {
+    background-size: 200% 200%;
+    background-position: right center;
+  }
+}
+
+.animate-gradient-text {
+  background-size: 200% 200%;
+  animation: gradient-text 4s ease infinite;
+}
+
+/* Floating animation for elements */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Glow pulse for buttons */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(168, 85, 247, 0.5);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* ==================== TEXT ROTATION ANIMATION ==================== */
+
+/* Smooth fade animation for each text item - 21s total (3s per item × 7 items) */
+@keyframes text-rotate-fade {
+  0% { opacity: 0; }
+  2% { opacity: 1; }
+  12% { opacity: 1; }
+  14% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* Container blur/contrast effect for smooth morphing transition */
+@keyframes text-rotate-combine {
+  0% { filter: blur(0px) contrast(1); }
+  12% { filter: blur(0px) contrast(1); }
+  13% { filter: blur(12px) contrast(30); }
+  14% { filter: blur(12px) contrast(30); }
+  15% { filter: blur(0px) contrast(1); }
+  26% { filter: blur(0px) contrast(1); }
+  27% { filter: blur(12px) contrast(30); }
+  28% { filter: blur(12px) contrast(30); }
+  29% { filter: blur(0px) contrast(1); }
+  40% { filter: blur(0px) contrast(1); }
+  41% { filter: blur(12px) contrast(30); }
+  42% { filter: blur(12px) contrast(30); }
+  43% { filter: blur(0px) contrast(1); }
+  54% { filter: blur(0px) contrast(1); }
+  55% { filter: blur(12px) contrast(30); }
+  56% { filter: blur(12px) contrast(30); }
+  57% { filter: blur(0px) contrast(1); }
+  69% { filter: blur(0px) contrast(1); }
+  70% { filter: blur(12px) contrast(30); }
+  71% { filter: blur(12px) contrast(30); }
+  72% { filter: blur(0px) contrast(1); }
+  83% { filter: blur(0px) contrast(1); }
+  84% { filter: blur(12px) contrast(30); }
+  85% { filter: blur(12px) contrast(30); }
+  86% { filter: blur(0px) contrast(1); }
+  97% { filter: blur(0px) contrast(1); }
+  98% { filter: blur(12px) contrast(30); }
+  99% { filter: blur(12px) contrast(30); }
+  100% { filter: blur(0px) contrast(1); }
+}
+
+.text-rotate-container {
+  display: grid;
+  place-items: center;
+  animation: text-rotate-combine 21s ease-in-out infinite;
+  isolation: isolate;
+  cursor: pointer;
+}
+
+.text-rotate-container > * {
+  grid-area: 1 / 1;
+}
+
+.text-rotate-item {
+  opacity: 0;
+  animation: text-rotate-fade 21s ease-in-out infinite;
+}
+
+/* Pause animation on hover - freeze on current word */
+.text-rotate-container:hover,
+.text-rotate-container:hover .text-rotate-item {
+  animation-play-state: paused;
+}
+
+.text-rotate-item:nth-child(1) { animation-delay: 0s; }
+.text-rotate-item:nth-child(2) { animation-delay: 3s; }
+.text-rotate-item:nth-child(3) { animation-delay: 6s; }
+.text-rotate-item:nth-child(4) { animation-delay: 9s; }
+.text-rotate-item:nth-child(5) { animation-delay: 12s; }
+.text-rotate-item:nth-child(6) { animation-delay: 15s; }
+.text-rotate-item:nth-child(7) { animation-delay: 18s; }

@@ -1,0 +1,9 @@
+{
+  "aiProvider": "openai",
+  "openaiModel": "gpt-image-1",
+  "geminiModel": "gemini-2.0-flash",
+  "replicateModel": "instructpix2pix",
+  "autoSaveToGallery": true,
+  "defaultUpscaleEnabled": false,
+  "defaultUpscaleFactor": 2
+}

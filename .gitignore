@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.wrangler/
+.mf/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.dev.vars
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+*.pem
+*.key
+.cache/
+tmp/
+temp/
+
+# Generated files
+*.d.ts.map
+*.tsbuildinfo
+
+# Local database files
+*.sqlite
+*.db
+*.sqlite3
+
+# Gallery uploads (stored in R2 in production)
+backend/gallery/*.json
+backend/uploads/
+frontend/public/uploads/

@@ -1,0 +1,448 @@
+{
+  "users": [
+    {
+      "id": "f616a4de-7ce4-4afa-b18d-20cc8efcb4fa",
+      "email": "admin@pixelperfect.ai",
+      "password": "$2b$10$9zCRfiagJJtbbmGJyj5vZO13r//qJGtBQ5e5kF7IcMj9YdIxYmSvS",
+      "name": "Admin",
+      "role": "admin",
+      "subscriptionId": "enterprise",
+      "tokensBalance": 1004999,
+      "tokensUsed": 0,
+      "createdAt": "2025-11-28T01:08:40.663Z",
+      "updatedAt": "2025-12-01T14:55:05.367Z",
+      "isActive": true
+    }
+  ],
+  "images": [],
+  "music": [],
+  "subscriptions": [
+    {
+      "id": "free",
+      "name": "Free",
+      "price": 0,
+      "tokensPerMonth": 50,
+      "maxImageSize": 5,
+      "maxBatchSize": 5,
+      "features": [
+        "50 tokens/month",
+        "Up to 5MB images",
+        "Basic upscaling"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "starter",
+      "name": "Starter",
+      "price": 9.99,
+      "tokensPerMonth": 500,
+      "maxImageSize": 15,
+      "maxBatchSize": 20,
+      "features": [
+        "500 tokens/month",
+        "Up to 15MB images",
+        "Batch processing (20)",
+        "Priority processing"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "pro",
+      "name": "Professional",
+      "price": 29.99,
+      "tokensPerMonth": 2000,
+      "maxImageSize": 50,
+      "maxBatchSize": 100,
+      "features": [
+        "2000 tokens/month",
+        "Up to 50MB images",
+        "Batch processing (100)",
+        "Priority processing",
+        "API access"
+      ],
+      "isActive": true
+    },
+    {
+      "id": "enterprise",
+      "name": "Enterprise",
+      "price": 99.99,
+      "tokensPerMonth": 10000,
+      "maxImageSize": 100,
+      "maxBatchSize": 500,
+      "features": [
+        "10000 tokens/month",
+        "Unlimited image size",
+        "Batch processing (500)",
+        "Priority processing",
+        "API access",
+        "Dedicated support"
+      ],
+      "isActive": true
+    }
+  ],
+  "userSubscriptions": [],
+  "transactions": [
+    {
+      "id": "018d49ba-1394-42de-961b-44d7a87753d5",
+      "userId": "f616a4de-7ce4-4afa-b18d-20cc8efcb4fa",
+      "type": "token_purchase",
+      "amount": 49.5,
+      "tokens": 5000,
+      "description": "Purchased 5000 tokens",
+      "createdAt": "2025-12-01T14:55:05.767Z"
+    }
+  ],
+  "processingJobs": [],
+  "tokenRules": [
+    {
+      "id": "default",
+      "name": "Default Token Calculation",
+      "description": "Standard token consumption rules",
+      "baseTokens": 1,
+      "perMegapixel": 0.5,
+      "multipliers": {
+        "scale2x": 1,
+        "scale4x": 2,
+        "reimagine": 3,
+        "faces": 1.5
+      },
+      "isActive": true
+    }
+  ],
+  "settings": {
+    "appName": "PixelPerfect AI",
+    "tokenPricePerUnit": 0.99,
+    "minTokenPurchase": 100,
+    "lockedStudioBehavior": "popup"
+  },
+  "musicWorkflows": [
+    {
+      "id": "5d82746b-b1b3-4b64-bd6f-1633b43b09ad",
+      "name": "Tehrani",
+      "description": "Tehrani",
+      "category": "pop",
+      "modelId": "suno/v5",
+      "modelType": "vocal",
+      "prompt": "Epic melancholic Persian pop ballad in 6/8 time, evoking nostalgia and longing. Dominant male lead vocal (90%) with expressive vibrato, delivering a heartfelt performance of the verse. Balanced female voice (52%) harmonizing subtly during the choruses. Balanced male/female duet (40%) creating intimate harmonic textures in the bridge. Supporting layered choir (30%) adding ethereal atmosphere during key sections, increasing in density. Arrangement features prominent warm nylon-string acoustic guitar (71%) and slightly overdriven electric guitar (60%) intertwining melodic lines with a Middle Eastern flair. Balanced piano (50%) providing rich harmonic foundation with arpeggiated chords and subtle rhythmic fills. Subtle cello (38%) adding sonorous depth and legato countermelodies. Deep, resonant bass (31%) anchoring the low end with a walking bassline, becoming more driving. Sweeping orchestral pop textures with prominent Persian melodic inflections, transitioning to driving rock rhythms during the \"هِزارو سیصَدو چَندی\" section, building to a soaring climax with layered vocals and intensified instrumentation.",
+      "lyrics": "---\n[Verse 1]\nپاتوق\nیِکی یِکی میان اَز راه\nهمه دوستانِ هَم دَفتَر فَضا اَز دودِ سیگار پُر\nصِدا بالا وُبالاتَر\nخوشو بِش بود وگاهی تَلخ\nمِثِ قَهوهِ ی بی شِکر\nتو پَرتاپِ هِزار واژِه\nیِکی مَرعُوب یِکی بَرتَر\nفَضای دوستانِ خوب\nفَضای مِهرَبانی ها\nفَضای عاشِقانِ عِشق\nقَهرو پادَرمیانی ها\n\n[Verse 2]\nبَرای شِعر نیمایی \nنَظَرگاهی دِگَر آمَد\nوَ شاگِردی کِه شُد اُستاد\nبا شِعری تازِه تَر آمَد\nهِزارو سیصَدو چَندی \nقَلمفَرسای بی دُولَت\nدِلَش از قافیه پُر بُود\nغَزَل میگُفت واسِه مِلَت\nهِزاروسیصَدُو چَندی \nروزایِ خوبِ اِستِبداد\nیِکی بُود توپِ مُروارید \nیِه شاعِر بود پُر اَز فَریاد ...\n\n[Outro]\nخَبَر این بود هِدایَت مُرد . تو پِرلاشِز خوابِش بُرد\n\n",
+      "style": "rock , Pop",
+      "tags": "",
+      "negativePrompt": "",
+      "sunoTitle": "پاتوق",
+      "sunoCustomMode": true,
+      "sunoInstrumental": false,
+      "duration": 30,
+      "temperature": 1,
+      "topK": 250,
+      "topP": 0.95,
+      "bpm": 120,
+      "instruments": [
+        {
+          "id": "guitar",
+          "volume": 71,
+          "auto": false
+        },
+        {
+          "id": "electric_guitar",
+          "volume": 60,
+          "auto": false
+        },
+        {
+          "id": "piano",
+          "volume": 50,
+          "auto": false
+        },
+        {
+          "id": "cello",
+          "volume": 38,
+          "auto": false
+        },
+        {
+          "id": "bass",
+          "volume": 31,
+          "auto": false
+        }
+      ],
+      "vocals": [
+        {
+          "id": "male",
+          "volume": 90,
+          "auto": false
+        },
+        {
+          "id": "duet",
+          "volume": 32,
+          "auto": false
+        },
+        {
+          "id": "choir",
+          "volume": 24,
+          "auto": false
+        }
+      ],
+      "createdAt": "2025-11-30T00:05:53.313Z",
+      "updatedAt": "2025-11-30T16:23:20.173Z",
+      "isPublic": false,
+      "userId": null
+    },
+    {
+      "id": "6a64aef6-df95-4956-b2aa-82360c423a26",
+      "name": "Tehrani",
+      "description": "Tehrani",
+      "category": "pop",
+      "modelId": "suno/v5",
+      "modelType": "vocal",
+      "prompt": "Nostalgic Persian pop. Longing, bittersweet memories. Warm guitar, electric guitar, piano, cello, bass. Male lead, duet, choir. [suno:persian pop, nostalgia, longing]",
+      "lyrics": "[Intro]\n[Mood: Nostalgic] [Energy: Medium] [Instrument: Nylon-String Guitar]\n[Instrument: Piano (Soft)] [Vocal Style: Emotional]\n\n[Verse 1]\nیِکِی یِکِی مِیٰان اَز راه (soft)\nهَمِه دُوستانِ هَم دَفتَر (soft)\nفَضا اَز دودِ سیگار پُر\nصِدا بالا وُ بالاتَر\nخُوشُو بِش بُود وُ گاهی تَلخ\nمِثِ قَهوِه‌یِ بی شِکَر\nتُو پَرتاپِ هِزار واژِه\nیِکِی مَرعُوب یِکِی بَرتَر\nفَضایِ دُوستانِ خُوب\nفَضایِ مِهرَبانی ها\nفَضایِ عاشِقانِ عِشق\nقَهرُو پادَرمیانی ها\n\n[Chorus]\n[Mood: Nostalgic] [Energy: Medium]\n[Vocal Style: Emotional]\nفَضایِ دُوستانِ خُوب (x2)\nفَضایِ مِهرَبانی ها\nفَضایِ عاشِقانِ عِشق\nقَهرُو پادَرمیانی ها\n\n[Verse 2]\n[Mood: Reflective] [Energy: Medium] [Instrument: Electric Guitar]\nبَرایِ شِعرِ نیمایی\nنَظَرگاهی دِگَر آمَد\nوَ شاگِردی کِه شُد اُستاد\nبا شِعری تازِه تَر آمَد\nهِزارُو سیصَدو چَندی\nقَلَمفَرسایِ بی دُولَت\nدِلَش اَز قافِیِه پُر بُود\nغَزَل میگُفت واسِه مِلَت\nهِزارُ وُ سیصَدُو چَندی\nروزایِ خُوبِ اِستِبداد\nیِکِی بُود توپِ مُروارید\nیِه شاعِر بُود پُر اَز فَریاد ... (emotional)\n\n[Chorus]\n[Mood: Nostalgic] [Energy: Medium]\n[Vocal Style: Emotional]\nفَضایِ دُوستانِ خُوب (x2)\nفَضایِ مِهرَبانی ها\nفَضایِ عاشِقانِ عِشق\nقَهرُو پادَرمیانی ها\n\n[Bridge]\n[Mood: Somber] [Energy: Low] [Instrument: Cello] [Vocal Style: Duet (Harmonies)]\nخَبَر این بُود هِدایَت مُرد . (spoken)\nتُو پِرلاشِز خوابِش بُرد (spoken)\n\n[Chorus]\n[Mood: Nostalgic] [Energy: Medium]\n[Vocal Style: Emotional]\nفَضایِ دُوستانِ خُوب (x2)\nفَضایِ مِهرَبانی ها\nفَضایِ عاشِقانِ عِشق\nقَهرُو پادَرمیانی ها\n\n[Outro]\n[Mood: Melancholic] [Energy: Low] [Instrument: Piano (Soft)] [Vocal Style: Male Voice]\nخَبَر این بُود هِدایَت مُرد . (spoken)\nتُو پِرلاشِز خوابِش بُرد (spoken)\n",
+      "style": "Pop, Rock, Energetic / Powerful, Epic / Dramatic, Electronic / EDM, Romantic / Sensual, Peaceful / Serene, Bass, Guitar, Male Vocals",
+      "tags": "",
+      "negativePrompt": "",
+      "sunoTitle": "پاتوق",
+      "sunoCustomMode": true,
+      "sunoInstrumental": false,
+      "duration": 30,
+      "temperature": 1,
+      "topK": 250,
+      "topP": 0.95,
+      "bpm": 120,
+      "instruments": [
+        {
+          "id": "guitar",
+          "volume": 71,
+          "auto": false
+        },
+        {
+          "id": "electric_guitar",
+          "volume": 60,
+          "auto": false
+        },
+        {
+          "id": "piano",
+          "volume": 50,
+          "auto": false
+        },
+        {
+          "id": "cello",
+          "volume": 38,
+          "auto": false
+        },
+        {
+          "id": "bass",
+          "volume": 31,
+          "auto": false
+        }
+      ],
+      "vocals": [
+        {
+          "id": "male",
+          "volume": 97,
+          "auto": false
+        },
+        {
+          "id": "duet",
+          "volume": 39,
+          "auto": false
+        },
+        {
+          "id": "choir",
+          "volume": 27,
+          "auto": false
+        }
+      ],
+      "createdAt": "2025-11-30T17:27:38.092Z",
+      "updatedAt": "2025-11-30T17:27:38.092Z",
+      "isPublic": false,
+      "userId": null
+    }
+  ],
+  "subscriptionPlans": [
+    {
+      "id": "image-studio",
+      "name": "Image Studio",
+      "description": "Full access to AI image generation, enhancement, and editing",
+      "type": "individual",
+      "studios": [
+        "image"
+      ],
+      "basePrice": 9.99,
+      "features": [
+        "AI Image Generation",
+        "Image Enhancement & Upscaling",
+        "Background Removal",
+        "Style Transfer",
+        "500 tokens/month"
+      ],
+      "tokensPerMonth": 500,
+      "maxImageSize": 50,
+      "maxBatchSize": 50,
+      "isActive": true,
+      "sortOrder": 1
+    },
+    {
+      "id": "video-studio",
+      "name": "Video Studio",
+      "description": "Create and edit videos with AI-powered tools",
+      "type": "individual",
+      "studios": [
+        "video"
+      ],
+      "basePrice": 14.99,
+      "features": [
+        "AI Video Generation",
+        "Video Enhancement",
+        "Text-to-Video",
+        "Image-to-Video",
+        "750 tokens/month"
+      ],
+      "tokensPerMonth": 750,
+      "maxImageSize": 100,
+      "maxBatchSize": 20,
+      "isActive": true,
+      "sortOrder": 2
+    },
+    {
+      "id": "sound-studio",
+      "name": "Sound Studio",
+      "description": "Generate music and audio with AI",
+      "type": "individual",
+      "studios": [
+        "sound"
+      ],
+      "basePrice": 12.99,
+      "features": [
+        "AI Music Generation",
+        "Voice Cloning",
+        "Audio Enhancement",
+        "Stem Separation",
+        "600 tokens/month"
+      ],
+      "tokensPerMonth": 600,
+      "maxImageSize": 0,
+      "maxBatchSize": 10,
+      "isActive": true,
+      "sortOrder": 3
+    },
+    {
+      "id": "text-studio",
+      "name": "Text Studio",
+      "description": "AI-powered text generation and chat",
+      "type": "individual",
+      "studios": [
+        "text"
+      ],
+      "basePrice": 7.99,
+      "features": [
+        "GPT-4o & Claude Access",
+        "AI Chat & Completion",
+        "Content Writing",
+        "Code Generation",
+        "400 tokens/month"
+      ],
+      "tokensPerMonth": 400,
+      "maxImageSize": 0,
+      "maxBatchSize": 0,
+      "isActive": true,
+      "sortOrder": 4
+    },
+    {
+      "id": "3d-studio",
+      "name": "3D Studio",
+      "description": "Generate 3D models and assets",
+      "type": "individual",
+      "studios": [
+        "3d"
+      ],
+      "basePrice": 14.99,
+      "features": [
+        "Text-to-3D Generation",
+        "Image-to-3D Conversion",
+        "3D Model Export",
+        "Multiple Formats",
+        "500 tokens/month"
+      ],
+      "tokensPerMonth": 500,
+      "maxImageSize": 50,
+      "maxBatchSize": 10,
+      "isActive": true,
+      "sortOrder": 5
+    },
+    {
+      "id": "creative-collection",
+      "name": "Creative Collection",
+      "description": "Image, Video, and Sound studios bundled together",
+      "type": "collection",
+      "studios": [
+        "image",
+        "video",
+        "sound"
+      ],
+      "basePrice": 29.99,
+      "features": [
+        "Image Studio - Full Access",
+        "Video Studio - Full Access",
+        "Sound Studio - Full Access",
+        "Priority Processing",
+        "1500 tokens/month",
+        "Save 20% vs Individual"
+      ],
+      "tokensPerMonth": 1500,
+      "maxImageSize": 100,
+      "maxBatchSize": 100,
+      "isActive": true,
+      "sortOrder": 10
+    },
+    {
+      "id": "advanced-collection",
+      "name": "Advanced Collection",
+      "description": "Complete access to all 5 studios",
+      "type": "advanced",
+      "studios": [
+        "image",
+        "video",
+        "sound",
+        "text",
+        "3d"
+      ],
+      "basePrice": 49.99,
+      "features": [
+        "All 5 Studios - Full Access",
+        "Priority Processing",
+        "API Access",
+        "3000 tokens/month",
+        "Dedicated Support",
+        "Save 35% vs Individual"
+      ],
+      "tokensPerMonth": 3000,
+      "maxImageSize": 100,
+      "maxBatchSize": 200,
+      "isActive": true,
+      "sortOrder": 20
+    }
+  ],
+  "billingPeriods": [
+    {
+      "period": "monthly",
+      "months": 1,
+      "discountPercent": 0,
+      "label": "Monthly"
+    },
+    {
+      "period": "quarterly",
+      "months": 3,
+      "discountPercent": 10,
+      "label": "3 Months"
+    },
+    {
+      "period": "biannual",
+      "months": 6,
+      "discountPercent": 15,
+      "label": "6 Months"
+    },
+    {
+      "period": "annual",
+      "months": 12,
+      "discountPercent": 20,
+      "label": "Annual"
+    }
+  ]
+}
