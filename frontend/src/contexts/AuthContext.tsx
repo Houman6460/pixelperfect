@@ -42,7 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const response = await authApi.getMe();
-      setUser(response.data);
+      // Handle both direct response and nested data format
+      const userData = response.data?.data?.user || response.data?.user || response.data;
+      if (userData) {
+        setUser({
+          ...userData,
+          tokensBalance: userData.tokens || userData.tokensBalance || 0,
+          tokensUsed: userData.tokensUsed || 0,
+        });
+      }
     } catch (error) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
@@ -56,16 +64,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const response = await authApi.login({ email, password });
-    localStorage.setItem("token", response.data.token);
-    localStorage.setItem("user", JSON.stringify(response.data.user));
-    setUser(response.data.user);
+    // Handle nested data format from Workers API
+    const data = response.data?.data || response.data;
+    if (data?.token) {
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      setUser({
+        ...data.user,
+        tokensBalance: data.user.tokens || 0,
+        tokensUsed: 0,
+      });
+    } else {
+      throw new Error(response.data?.error || 'Login failed');
+    }
   };
 
   const register = async (email: string, password: string, name: string) => {
     const response = await authApi.register({ email, password, name });
-    localStorage.setItem("token", response.data.token);
-    localStorage.setItem("user", JSON.stringify(response.data.user));
-    setUser(response.data.user);
+    // Handle nested data format from Workers API
+    const data = response.data?.data || response.data;
+    if (data?.token) {
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      setUser({
+        ...data.user,
+        tokensBalance: data.user.tokens || 0,
+        tokensUsed: 0,
+      });
+    } else {
+      throw new Error(response.data?.error || 'Registration failed');
+    }
   };
 
   const logout = () => {

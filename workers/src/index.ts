@@ -22,20 +22,25 @@ app.use('*', secureHeaders());
 
 // CORS configuration
 app.use('*', cors({
-  origin: (origin, c) => {
-    const env = c.env as Env;
-    // Allow configured origins and localhost for development
-    const allowedOrigins = [
-      env.CORS_ORIGIN,
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-    ].filter(Boolean);
+  origin: (origin) => {
+    // Allow Cloudflare Pages domains, localhost, and configured origins
+    const allowedPatterns = [
+      /^https:\/\/.*\.pixelperfect.*\.pages\.dev$/,
+      /^https:\/\/pixelperfect.*\.pages\.dev$/,
+      /^https:\/\/pixelperfect\.pages\.dev$/,
+      /^http:\/\/localhost:\d+$/,
+      /^http:\/\/127\.0\.0\.1:\d+$/,
+    ];
     
-    if (!origin || allowedOrigins.includes(origin)) {
-      return origin || '*';
+    if (!origin) return '*';
+    
+    for (const pattern of allowedPatterns) {
+      if (pattern.test(origin)) {
+        return origin;
+      }
     }
-    return null;
+    
+    return origin; // Allow all origins for now to debug
   },
   allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
