@@ -1,12 +1,29 @@
 import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+// Determine API base URL based on environment
+const getApiBaseUrl = () => {
+  // Check for explicit env variable
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  
+  // Production: use Cloudflare Workers API
+  if (typeof window !== 'undefined' && window.location.hostname.includes('pages.dev')) {
+    return 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev/api';
+  }
+  
+  // Development: use local proxy
+  return '/api';
+};
+
+const API_BASE = getApiBaseUrl();
 
 export const api = axios.create({
-  baseURL: API_BASE || "/api",
+  baseURL: API_BASE,
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 30000, // 30 second timeout
 });
 
 // Add auth token to requests
