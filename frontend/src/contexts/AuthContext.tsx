@@ -30,50 +30,52 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Initialize user from localStorage synchronously to prevent flash
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const savedUser = localStorage.getItem("user");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  // Start with isLoading = false since we load user synchronously
+  const [isLoading, setIsLoading] = useState(false);
 
   const refreshUser = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setUser(null);
-        setIsLoading(false);
-        return;
-      }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setUser(null);
+      return;
+    }
 
+    try {
       const response = await authApi.getMe();
       // Handle both direct response and nested data format
       const userData = response.data?.data?.user || response.data?.user || response.data;
       if (userData) {
-        setUser({
+        const newUser = {
           ...userData,
           tokensBalance: userData.tokens || userData.tokensBalance || 0,
           tokensUsed: userData.tokensUsed || 0,
-        });
+        };
+        setUser(newUser);
+        localStorage.setItem("user", JSON.stringify(newUser));
       }
-      setIsLoading(false);
     } catch (error) {
       console.error("Auth refresh error:", error);
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       setUser(null);
-      setIsLoading(false);
     }
   };
 
+  // Refresh user data in background (non-blocking)
   useEffect(() => {
-    // Set a maximum timeout to prevent infinite loading
-    const timeout = setTimeout(() => {
-      if (isLoading) {
-        console.warn("Auth loading timeout - forcing completion");
-        setIsLoading(false);
-      }
-    }, 5000);
-    
-    refreshUser();
-    
-    return () => clearTimeout(timeout);
+    const token = localStorage.getItem("token");
+    if (token) {
+      refreshUser();
+    }
   }, []);
 
   const login = async (email: string, password: string) => {

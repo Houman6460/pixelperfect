@@ -912,7 +912,7 @@ export default function LandingPage() {
           <div className="space-y-4">
             {faqs.map((faq, i) => (
               <div key={i} className="rounded-xl border border-slate-700/50 overflow-hidden">
-                <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full px-6 py-4 flex items-center justify-between text-left bg-slate-800/30 hover:bg-slate-800/50 transition" aria-expanded={openFaq === i}>
+                <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full px-6 py-4 flex items-center justify-between text-left bg-slate-800/30 hover:bg-slate-800/50 transition" aria-expanded={openFaq === i ? "true" : "false"}>
                   <span className="font-medium text-white">{faq.q}</span>
                   <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
                 </button>

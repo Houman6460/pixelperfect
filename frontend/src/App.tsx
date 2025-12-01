@@ -979,7 +979,7 @@ function App() {
                       onClick={() => setAutoUpscale(!autoUpscale)}
                       className={`w-10 h-5 rounded-full transition ${autoUpscale ? "bg-emerald-500" : "bg-slate-600"}`}
                       role="switch"
-                      aria-checked={autoUpscale}
+                      aria-checked={autoUpscale ? "true" : "false"}
                       aria-labelledby="auto-upscale-label"
                       title={autoUpscale ? "Disable auto upscale" : "Enable auto upscale"}
                     >
