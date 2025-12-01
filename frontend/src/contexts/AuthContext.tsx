@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = localStorage.getItem("token");
       if (!token) {
         setUser(null);
+        setIsLoading(false);
         return;
       }
 
@@ -51,15 +52,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           tokensUsed: userData.tokensUsed || 0,
         });
       }
+      setIsLoading(false);
     } catch (error) {
+      console.error("Auth refresh error:", error);
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       setUser(null);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    refreshUser().finally(() => setIsLoading(false));
+    // Set a maximum timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (isLoading) {
+        console.warn("Auth loading timeout - forcing completion");
+        setIsLoading(false);
+      }
+    }, 5000);
+    
+    refreshUser();
+    
+    return () => clearTimeout(timeout);
   }, []);
 
   const login = async (email: string, password: string) => {

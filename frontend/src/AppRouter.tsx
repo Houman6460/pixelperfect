@@ -1,7 +1,52 @@
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, Component, ErrorInfo, ReactNode } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
+
+// Import critical pages directly (not lazy) to ensure they work
+import LandingPage from "./pages/LandingPage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import SubscriptionPage from "./pages/SubscriptionPage";
+
+// Error Boundary to catch render errors
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Render error caught:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-6 max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertCircle className="w-6 h-6 text-red-500" />
+              <h2 className="text-red-400 font-semibold">Something went wrong</h2>
+            </div>
+            <p className="text-slate-400 text-sm mb-4">{this.state.error?.message}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Loading fallback component
 const PageLoader = () => (
@@ -20,10 +65,7 @@ const withSuspense = (Component: React.LazyExoticComponent<React.ComponentType<a
   </Suspense>
 );
 
-// Lazy load all pages for better code splitting
-const LandingPage = lazy(() => import("./pages/LandingPage"));
-const LoginPage = lazy(() => import("./pages/LoginPage"));
-const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+// Lazy load non-critical pages
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TokensPage = lazy(() => import("./pages/TokensPage"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
@@ -42,9 +84,6 @@ const ThreeDStudioPage = lazy(() => import("./pages/studios/ThreeDStudioPage"));
 const PrivacyPolicyPage = lazy(() => import("./pages/legal/PrivacyPolicyPage"));
 const TermsOfServicePage = lazy(() => import("./pages/legal/TermsOfServicePage"));
 const CookiePolicyPage = lazy(() => import("./pages/legal/CookiePolicyPage"));
-
-// Subscription Page
-const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
 
 // Legacy App (Enhance Page) - Heavy component, lazy load
 const App = lazy(() => import("./App"));
@@ -89,11 +128,12 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 export default function AppRouter() {
   return (
+    <ErrorBoundary>
     <Routes>
       {/* Public Routes */}
-      <Route path="/" element={withSuspense(LandingPage)} />
-      <Route path="/login" element={withSuspense(LoginPage)} />
-      <Route path="/register" element={withSuspense(RegisterPage)} />
+      <Route path="/" element={<ErrorBoundary><LandingPage /></ErrorBoundary>} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       
       {/* Studio Landing Pages */}
       <Route path="/studios/image" element={withSuspense(ImageStudioPage)} />
@@ -108,8 +148,8 @@ export default function AppRouter() {
       <Route path="/legal/cookies" element={withSuspense(CookiePolicyPage)} />
       
       {/* Subscription/Pricing Page */}
-      <Route path="/pricing" element={withSuspense(SubscriptionPage)} />
-      <Route path="/subscribe" element={withSuspense(SubscriptionPage)} />
+      <Route path="/pricing" element={<SubscriptionPage />} />
+      <Route path="/subscribe" element={<SubscriptionPage />} />
       
       {/* Demo/App Route (legacy, no auth required) */}
       <Route path="/app" element={withSuspense(App)} />
@@ -224,5 +264,6 @@ export default function AppRouter() {
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </ErrorBoundary>
   );
 }
