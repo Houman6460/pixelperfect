@@ -81,3 +81,52 @@ export const enhanceApi = {
       headers: { "Content-Type": "multipart/form-data" },
     }),
 };
+
+// Subscriptions API (public + authenticated endpoints)
+export const subscriptionApi = {
+  // Public - get all available plans
+  getPlans: () => api.get("/subscriptions/plans"),
+  
+  // Authenticated - get user's subscriptions
+  getMySubscriptions: () => api.get("/subscriptions/my-subscriptions"),
+  
+  // Authenticated - subscribe to a plan
+  subscribe: (planId: string, billingPeriod: string) =>
+    api.post("/subscriptions/subscribe", { planId, billingPeriod }),
+  
+  // Authenticated - cancel subscription
+  cancelSubscription: (subscriptionId: string) =>
+    api.post(`/subscriptions/cancel/${subscriptionId}`),
+  
+  // Authenticated - check access to studio
+  checkAccess: (studio: string) => api.get(`/subscriptions/access/${studio}`),
+};
+
+// Gallery API
+export const galleryApi = {
+  getItems: (type?: string) => api.get("/gallery", { params: { type } }),
+  getItem: (id: string) => api.get(`/gallery/${id}`),
+  uploadItem: (formData: FormData) =>
+    api.post("/gallery/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  deleteItem: (id: string) => api.delete(`/gallery/${id}`),
+};
+
+// Generation API
+export const generateApi = {
+  image: (data: { prompt: string; model?: string; size?: string }) =>
+    api.post("/generate/image", data),
+  text: (data: { messages: Array<{ role: string; content: string }>; model?: string }) =>
+    api.post("/generate/text", data),
+  getJobStatus: (jobId: string) => api.get(`/generate/job/${jobId}`),
+};
+
+// Media API (R2 storage)
+export const mediaApi = {
+  getUploadUrl: (filename: string, contentType: string, type?: string) =>
+    api.post("/media/upload-url", { filename, contentType, type }),
+  listFiles: (type?: string) => api.get("/media/list", { params: { type } }),
+  getUsage: () => api.get("/media/usage"),
+  deleteFile: (key: string) => api.delete(`/media/file/${key}`),
+};

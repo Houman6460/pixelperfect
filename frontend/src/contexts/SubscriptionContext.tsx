@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import axios from "axios";
 import { useAuth } from "./AuthContext";
+import { subscriptionApi } from "../lib/api";
 import {
   StudioType,
   BillingPeriod,
@@ -8,11 +8,6 @@ import {
   UserSubscription,
   BillingPeriodConfig,
 } from "../types/subscription";
-
-const API_BASE = "http://localhost:4000";
-
-// Helper to get token from localStorage
-const getToken = () => localStorage.getItem("token");
 
 interface SubscriptionContextType {
   // State
@@ -61,9 +56,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   // Fetch available plans
   const fetchPlans = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_BASE}/api/subscriptions/plans`);
-      setPlans(response.data.plans);
-      setBillingPeriods(response.data.billingPeriods);
+      const response = await subscriptionApi.getPlans();
+      if (response.data?.success && response.data?.data) {
+        setPlans(response.data.data.plans || []);
+        setBillingPeriods(response.data.data.billingPeriods || []);
+      }
     } catch (err) {
       console.error("Failed to fetch plans:", err);
       setError("Failed to fetch subscription plans");
@@ -72,95 +69,98 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   
   // Fetch user's subscriptions
   const fetchUserSubscriptions = useCallback(async () => {
-    const token = getToken();
-    if (!isAuthenticated || !token) return;
+    if (!isAuthenticated) return;
     
     try {
-      const response = await axios.get(`${API_BASE}/api/subscriptions/my-subscriptions`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUserSubscriptions(response.data.subscriptions);
+      const response = await subscriptionApi.getMySubscriptions();
+      if (response.data?.success && response.data?.data) {
+        setUserSubscriptions(response.data.data.subscriptions || []);
+      }
     } catch (err) {
       console.error("Failed to fetch user subscriptions:", err);
     }
   }, [isAuthenticated]);
   
-  // Fetch user's access
+  // Fetch user's access - derive from subscriptions
   const fetchAccess = useCallback(async () => {
-    const token = getToken();
-    if (!isAuthenticated || !token) {
-      // Not logged in - no access
+    if (!isAuthenticated) {
       setAccessibleStudios([]);
       return;
     }
     
     try {
-      const response = await axios.get(`${API_BASE}/api/subscriptions/access`, {
-        headers: { Authorization: `Bearer ${token}` }
+      // Get accessible studios from user's active subscriptions
+      const allStudios: StudioType[] = [];
+      userSubscriptions.forEach((sub: any) => {
+        const studios = sub.studios || [];
+        studios.forEach((studio: StudioType) => {
+          if (!allStudios.includes(studio)) {
+            allStudios.push(studio);
+          }
+        });
       });
-      setAccessibleStudios(response.data.accessibleStudios);
-      setLockedStudioBehavior(response.data.lockedStudioBehavior);
+      setAccessibleStudios(allStudios);
     } catch (err) {
       console.error("Failed to fetch access:", err);
       setAccessibleStudios([]);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, userSubscriptions]);
   
   // Subscribe to a plan
   const subscribe = useCallback(async (planId: string, billingPeriod: BillingPeriod): Promise<boolean> => {
-    const token = getToken();
-    if (!isAuthenticated || !token) return false;
+    if (!isAuthenticated) return false;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      await axios.post(`${API_BASE}/api/subscriptions/subscribe`, { planId, billingPeriod }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await subscriptionApi.subscribe(planId, billingPeriod);
       
-      // Refresh subscriptions and access
-      await fetchUserSubscriptions();
-      await fetchAccess();
+      if (response.data?.success) {
+        // Refresh subscriptions and access
+        await fetchUserSubscriptions();
+        setIsLoading(false);
+        return true;
+      }
       
+      setError(response.data?.error || "Failed to subscribe");
       setIsLoading(false);
-      return true;
+      return false;
     } catch (err: any) {
       console.error("Failed to subscribe:", err);
       setError(err.response?.data?.error || "Failed to subscribe");
       setIsLoading(false);
       return false;
     }
-  }, [isAuthenticated, fetchUserSubscriptions, fetchAccess]);
+  }, [isAuthenticated, fetchUserSubscriptions]);
   
   // Cancel subscription
   const cancelSubscription = useCallback(async (subscriptionId: string, immediate = false): Promise<boolean> => {
-    const token = getToken();
-    if (!isAuthenticated || !token) return false;
+    if (!isAuthenticated) return false;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      await axios.post(`${API_BASE}/api/subscriptions/cancel/${subscriptionId}`, { immediate }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await subscriptionApi.cancelSubscription(subscriptionId);
       
-      // Refresh subscriptions
-      await fetchUserSubscriptions();
-      if (immediate) {
-        await fetchAccess();
+      if (response.data?.success) {
+        // Refresh subscriptions
+        await fetchUserSubscriptions();
+        setIsLoading(false);
+        return true;
       }
       
+      setError(response.data?.error || "Failed to cancel subscription");
       setIsLoading(false);
-      return true;
+      return false;
     } catch (err: any) {
       console.error("Failed to cancel subscription:", err);
       setError(err.response?.data?.error || "Failed to cancel subscription");
       setIsLoading(false);
       return false;
     }
-  }, [isAuthenticated, fetchUserSubscriptions, fetchAccess]);
+  }, [isAuthenticated, fetchUserSubscriptions]);
   
   // Check if user has access to a studio
   const hasStudioAccess = useCallback((studio: StudioType): boolean => {

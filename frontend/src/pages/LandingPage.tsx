@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
+import { subscriptionApi } from "../lib/api";
 
 // Lazy load Lottie to improve initial bundle size and LCP
 const Lottie = lazy(() => import("lottie-react"));
@@ -246,6 +247,27 @@ const billingPeriods = [
   { key: "annual", label: "Annual", months: 12, discount: 20 },
 ];
 
+// Plan type from API
+interface ApiPlan {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  base_price: number;
+  tokens_per_month: number;
+  studios: string[];
+  features: string[];
+  is_active: number;
+  pricing?: Array<{
+    period: string;
+    label: string;
+    months: number;
+    discount: number;
+    monthlyPrice: number;
+    totalPrice: number;
+  }>;
+}
+
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -255,10 +277,64 @@ export default function LandingPage() {
   const [robotTilt, setRobotTilt] = useState({ x: 0, y: 0 });
   const [selectedBillingPeriod, setSelectedBillingPeriod] = useState("monthly");
   const [selectedPlanCategory, setSelectedPlanCategory] = useState("individual");
+  const [apiPlans, setApiPlans] = useState<ApiPlan[]>([]);
+  const [apiBillingPeriods, setApiBillingPeriods] = useState<typeof billingPeriods>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
   const robotContainerRef = useRef<HTMLDivElement>(null);
   
-  // Get current plans based on selected category
+  // Fetch plans from API
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const response = await subscriptionApi.getPlans();
+        if (response.data?.success && response.data?.data) {
+          setApiPlans(response.data.data.plans || []);
+          if (response.data.data.billingPeriods?.length > 0) {
+            setApiBillingPeriods(response.data.data.billingPeriods.map((bp: any) => ({
+              key: bp.period,
+              label: bp.label,
+              months: bp.months,
+              discount: bp.discount_percent,
+            })));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch plans from API, using fallback:', error);
+        // Fallback to static plans is automatic via getCurrentPlans
+      } finally {
+        setPlansLoading(false);
+      }
+    };
+    fetchPlans();
+  }, []);
+  
+  // Get current plans based on selected category (API-first with fallback)
   const getCurrentPlans = () => {
+    // If we have API plans, filter by category
+    if (apiPlans.length > 0) {
+      const typeMap: Record<string, string[]> = {
+        individual: ['individual'],
+        collection: ['collection', 'advanced'],
+        full: ['tier'],
+      };
+      const types = typeMap[selectedPlanCategory] || ['individual'];
+      const filtered = apiPlans.filter(p => types.includes(p.type));
+      
+      // Convert API format to component format
+      return filtered.map(p => ({
+        name: p.name,
+        basePrice: p.base_price,
+        tokens: p.tokens_per_month > 0 ? p.tokens_per_month.toLocaleString() : 'Unlimited',
+        features: p.features || [],
+        cta: p.base_price === 0 ? (p.type === 'tier' ? 'Get Started' : 'Contact Sales') : 'Subscribe',
+        href: p.base_price === 0 && p.type === 'tier' && p.name === 'Free' ? '/register' : '/pricing',
+        highlighted: p.name === 'Professional' || p.name === 'Video Studio' || p.name === 'Creative Collection',
+        isCustom: p.name === 'Enterprise',
+        icon: p.studios[0] || 'image',
+      }));
+    }
+    
+    // Fallback to static plans
     switch (selectedPlanCategory) {
       case "individual": return individualPlans;
       case "collection": return collectionPlans;
@@ -267,9 +343,10 @@ export default function LandingPage() {
     }
   };
   
-  // Calculate price with discount
+  // Calculate price with discount (use API billing periods if available)
   const calculatePrice = (basePrice: number) => {
-    const period = billingPeriods.find(p => p.key === selectedBillingPeriod);
+    const periods = apiBillingPeriods.length > 0 ? apiBillingPeriods : billingPeriods;
+    const period = periods.find(p => p.key === selectedBillingPeriod);
     if (!period || basePrice === 0) return { monthly: basePrice, total: basePrice, discount: 0 };
     const discountedMonthly = basePrice * (1 - period.discount / 100);
     return {
