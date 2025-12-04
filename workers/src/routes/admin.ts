@@ -286,6 +286,11 @@ adminRoutes.get('/ai-settings', async (c) => {
       (settings.results || []).map((s: any) => [s.key, s.value])
     );
     
+    // Check API keys from KV cache first, then env
+    const openaiKey = await c.env.CACHE.get('api_key_openai') || c.env.OPENAI_API_KEY;
+    const googleKey = await c.env.CACHE.get('api_key_google') || c.env.GOOGLE_API_KEY;
+    const replicateKey = await c.env.CACHE.get('api_key_replicate') || c.env.REPLICATE_API_KEY;
+    
     // Return in the format expected by frontend
     return c.json({ 
       success: true, 
@@ -300,9 +305,9 @@ adminRoutes.get('/ai-settings', async (c) => {
           defaultUpscaleFactor: parseInt(settingsMap.default_upscale_factor) || 2,
         },
         apiKeys: {
-          openai: c.env.OPENAI_API_KEY ? 'configured' : 'not_configured',
-          gemini: c.env.ANTHROPIC_API_KEY ? 'configured' : 'not_configured',
-          replicate: c.env.REPLICATE_API_KEY ? 'configured' : 'not_configured',
+          openai: openaiKey ? 'configured' : 'not_configured',
+          google: googleKey ? 'configured' : 'not_configured',
+          replicate: replicateKey ? 'configured' : 'not_configured',
         }
       }
     });
@@ -317,16 +322,28 @@ adminRoutes.get('/model-api-settings', async (c) => {
   try {
     const models = await c.env.DB.prepare('SELECT * FROM ai_model_configs ORDER BY type, provider').all();
     
-    // Map provider to API key availability
+    // Check API keys from KV cache first, then env
+    const apiKeyChecks = await Promise.all([
+      c.env.CACHE.get('api_key_openai'),
+      c.env.CACHE.get('api_key_anthropic'),
+      c.env.CACHE.get('api_key_replicate'),
+      c.env.CACHE.get('api_key_stability'),
+      c.env.CACHE.get('api_key_google'),
+      c.env.CACHE.get('api_key_suno'),
+      c.env.CACHE.get('api_key_kling'),
+      c.env.CACHE.get('api_key_meshy'),
+    ]);
+    
+    // Map provider to API key availability (check KV first, then env)
     const providerKeyMap: Record<string, boolean> = {
-      openai: !!c.env.OPENAI_API_KEY,
-      anthropic: !!c.env.ANTHROPIC_API_KEY,
-      replicate: !!c.env.REPLICATE_API_KEY,
-      stability: !!c.env.STABILITY_API_KEY,
-      google: !!c.env.GOOGLE_API_KEY,
-      suno: !!c.env.SUNO_API_KEY,
-      kling: !!c.env.KLING_API_KEY,
-      meshy: !!c.env.MESHY_API_KEY,
+      openai: !!(apiKeyChecks[0] || c.env.OPENAI_API_KEY),
+      anthropic: !!(apiKeyChecks[1] || c.env.ANTHROPIC_API_KEY),
+      replicate: !!(apiKeyChecks[2] || c.env.REPLICATE_API_KEY),
+      stability: !!(apiKeyChecks[3] || c.env.STABILITY_API_KEY),
+      google: !!(apiKeyChecks[4] || c.env.GOOGLE_API_KEY),
+      suno: !!(apiKeyChecks[5] || c.env.SUNO_API_KEY),
+      kling: !!(apiKeyChecks[6] || c.env.KLING_API_KEY),
+      meshy: !!(apiKeyChecks[7] || c.env.MESHY_API_KEY),
     };
     
     // Transform to frontend format
@@ -352,14 +369,14 @@ adminRoutes.get('/model-api-settings', async (c) => {
       data: {
         models: modelSettings,
         apiKeys: {
-          openai: c.env.OPENAI_API_KEY ? 'configured' : 'not_configured',
-          anthropic: c.env.ANTHROPIC_API_KEY ? 'configured' : 'not_configured',
-          replicate: c.env.REPLICATE_API_KEY ? 'configured' : 'not_configured',
-          stability: c.env.STABILITY_API_KEY ? 'configured' : 'not_configured',
-          google: c.env.GOOGLE_API_KEY ? 'configured' : 'not_configured',
-          suno: c.env.SUNO_API_KEY ? 'configured' : 'not_configured',
-          kling: c.env.KLING_API_KEY ? 'configured' : 'not_configured',
-          meshy: c.env.MESHY_API_KEY ? 'configured' : 'not_configured',
+          openai: providerKeyMap.openai ? 'configured' : 'not_configured',
+          anthropic: providerKeyMap.anthropic ? 'configured' : 'not_configured',
+          replicate: providerKeyMap.replicate ? 'configured' : 'not_configured',
+          stability: providerKeyMap.stability ? 'configured' : 'not_configured',
+          google: providerKeyMap.google ? 'configured' : 'not_configured',
+          suno: providerKeyMap.suno ? 'configured' : 'not_configured',
+          kling: providerKeyMap.kling ? 'configured' : 'not_configured',
+          meshy: providerKeyMap.meshy ? 'configured' : 'not_configured',
         }
       }
     });
