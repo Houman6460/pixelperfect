@@ -20,12 +20,62 @@ import {
 import { parseScenario } from './scenarioParser';
 import { getModelCapabilities } from './modelRegistry';
 import { compileFinalPrompt } from './promptAssistant';
+import {
+  InlineTag,
+  SegmentSettings,
+  getModelConstraints,
+  mapTagsToSettings,
+  createDefaultSegmentSettings,
+  generateEnhancedNegativePrompt,
+  applyModelConstraints,
+  inferSettingsFromPrompt,
+  calculateOptimalDuration,
+  buildEnhancedPrompt,
+} from './segmentAutoConfig';
 
 /**
  * Generate unique ID
  */
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Extract inline tags from scenario text
+ */
+function extractInlineTags(text: string): InlineTag[] {
+  const tags: InlineTag[] = [];
+  const regex = /\[(\w+):\s*([^\]]+)\]/g;
+  let match;
+  
+  while ((match = regex.exec(text)) !== null) {
+    tags.push({
+      type: match[1].toLowerCase(),
+      value: match[2].trim(),
+      offset: match.index,
+    });
+  }
+  
+  return tags;
+}
+
+/**
+ * Map motion setting to MotionProfile type
+ */
+function mapMotionToProfile(motion: string | undefined): MotionProfile | null {
+  if (!motion) return null;
+  
+  const mapping: Record<string, MotionProfile> = {
+    'smooth': 'smooth',
+    'slow': 'smooth',
+    'cinematic': 'dramatic',
+    'dynamic': 'dynamic',
+    'fast': 'dynamic',
+    'jitter': 'subtle',
+    'none': 'subtle',
+  };
+  
+  return mapping[motion] || null;
 }
 
 /**
@@ -204,13 +254,18 @@ export async function generatePlan(
       enable_frame_chaining: true,
       style_consistency: true,
       character_consistency: true,
+      use_inline_tags: false,
     },
   } = request;
 
   const warnings: string[] = [];
 
-  // Get model capabilities
+  // Get model capabilities and constraints
   const modelCaps = getModelCapabilities(target_model_id);
+  const modelConstraints = getModelConstraints(target_model_id);
+  
+  // Extract inline tags from scenario text
+  const inlineTags: InlineTag[] = (request as any).inline_tags || extractInlineTags(scenario_text);
 
   // Parse scenario into breakdown
   const parsed = await parseScenario({ scenario_text, language });
@@ -221,17 +276,35 @@ export async function generatePlan(
   const maxSegmentDuration = modelCaps.maxDurationSec;
   const segments: TimelineSegment[] = [];
   let segmentNumber = 0;
+  
+  // Track text offset for tag mapping
+  let currentTextOffset = 0;
 
   for (const scene of breakdown.scenes) {
+    // Calculate scene text boundaries for tag assignment
+    const sceneText = scene.summary + ' ' + scene.visual_style;
+    const sceneStartOffset = currentTextOffset;
+    const sceneEndOffset = currentTextOffset + sceneText.length;
+    currentTextOffset = sceneEndOffset + 1;
+    
+    // Get tags that apply to this scene
+    const sceneTags = inlineTags.filter(tag => 
+      tag.offset >= sceneStartOffset && tag.offset < sceneEndOffset
+    );
+    
     // Calculate how many segments this scene needs
     const sceneSegmentCount = Math.ceil(scene.estimated_duration_sec / maxSegmentDuration);
-    const segmentDuration = Math.min(maxSegmentDuration, scene.estimated_duration_sec / sceneSegmentCount);
+    const baseSegmentDuration = Math.min(maxSegmentDuration, scene.estimated_duration_sec / sceneSegmentCount);
 
     // Distribute dialogue across segments
     const dialoguePerSegment = Math.ceil(scene.dialogue_blocks.length / sceneSegmentCount);
 
     for (let i = 0; i < sceneSegmentCount; i++) {
       segmentNumber++;
+      
+      // Get tags for this specific segment (distribute scene tags across segments)
+      const segmentTagCount = Math.ceil(sceneTags.length / sceneSegmentCount);
+      const segmentTags = sceneTags.slice(i * segmentTagCount, (i + 1) * segmentTagCount);
 
       // Get dialogue for this segment
       const segmentDialogue = scene.dialogue_blocks
@@ -249,30 +322,68 @@ export async function generatePlan(
 
       // Build segment prompt
       const segmentPrompt = buildSegmentPrompt(scene, i, sceneSegmentCount, breakdown);
+      
+      // Map inline tags to segment settings
+      const tagSettings = mapTagsToSettings(segmentTags);
+      
+      // Infer additional settings from prompt content
+      const inferredSettings = inferSettingsFromPrompt(segmentPrompt);
+      
+      // Create default settings for this segment
+      const defaultSettings = createDefaultSegmentSettings(target_model_id, segmentNumber - 1, breakdown.scenes.length * 2);
+      
+      // Merge all settings (priority: tags > inferred > defaults)
+      const mergedSettings: Partial<SegmentSettings> = {
+        ...defaultSettings,
+        ...inferredSettings,
+        ...tagSettings,
+      };
 
-      // Get camera and motion from scene suggestions
-      const cameraPath: CameraPath = scene.camera_suggestions[0]?.type || 'static';
-      const motionProfile: MotionProfile = determineMotionProfile(scene);
+      // Get camera and motion - prefer from tags, then scene, then defaults
+      const cameraPath: CameraPath = (mergedSettings.camera as CameraPath) || 
+        scene.camera_suggestions[0]?.type || 'static';
+      const motionProfile: MotionProfile = mapMotionToProfile(mergedSettings.motion) || 
+        determineMotionProfile(scene);
 
-      // Determine transition
+      // Determine transition - prefer from tags
       const isLastSegmentOfScene = i === sceneSegmentCount - 1;
-      const transition: TransitionType = isLastSegmentOfScene
-        ? (scene.transition_to_next as TransitionType || 'cut')
-        : 'none';
+      const transition: TransitionType = (mergedSettings.transition as TransitionType) ||
+        (isLastSegmentOfScene ? (scene.transition_to_next as TransitionType || 'cut') : 'none');
+      
+      // Calculate optimal duration based on content and tags
+      const segmentDuration = calculateOptimalDuration(
+        segmentPrompt.length,
+        !!segmentDialogue,
+        segmentTags,
+        modelConstraints
+      );
+      
+      // Build enhanced prompt with tag-based instructions
+      const enhancedPrompt = buildEnhancedPrompt(segmentPrompt, mergedSettings);
 
       // Compile final prompt
-      let finalPrompt = segmentPrompt;
+      let finalPrompt = enhancedPrompt;
       try {
         const compiled = await compileFinalPrompt({
           model_id: target_model_id,
-          scene_prompt: segmentPrompt,
+          scene_prompt: enhancedPrompt,
           dialogue: segmentDialogue || undefined,
           language,
         }, openaiKey);
         finalPrompt = compiled.final_prompt;
       } catch (e) {
-        console.warn('Prompt compilation failed, using raw prompt');
+        console.warn('Prompt compilation failed, using enhanced prompt');
       }
+      
+      // Generate negative prompt based on content and tags
+      const negativePrompt = generateEnhancedNegativePrompt(segmentPrompt, segmentTags);
+      
+      // Determine style preset from tags or inferred
+      const stylePreset = mergedSettings.style_preset || 'cinematic';
+      
+      // Determine if enhancement should be enabled
+      const enhanceEnabled = mergedSettings.enhance_enabled || 
+        scene.emotions.some(e => ['dramatic', 'epic', 'intense'].includes(e.toLowerCase()));
 
       const segment: TimelineSegment = {
         segment_id: `seg-${generateId()}`,
@@ -294,6 +405,18 @@ export async function generatePlan(
         },
         continuity_notes: scene.continuity_notes,
         status: 'pending',
+        // NEW: Extended segment settings
+        negative_prompt: negativePrompt,
+        style_preset: stylePreset,
+        enhance_enabled: enhanceEnabled,
+        enhance_model: enhanceEnabled ? 'auto' : undefined,
+        seed: mergedSettings.seed || Math.floor(Math.random() * 2147483647),
+        first_frame_mode: segmentNumber === 1 ? 'none' : 'auto',
+        inline_tags: segmentTags.map(t => ({ type: t.type, value: t.value })),
+        tag_metadata: mergedSettings.tag_metadata || {},
+        lighting: mergedSettings.lighting,
+        emotion: mergedSettings.emotion,
+        sfx_cue: mergedSettings.sfx_cue,
       };
 
       segments.push(segment);

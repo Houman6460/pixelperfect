@@ -101,6 +101,24 @@ export interface TimelineSegment {
   };
   continuity_notes?: string;
   status: 'pending' | 'generating' | 'generated' | 'error';
+  
+  // Extended segment settings (auto-populated from Scenario tags)
+  negative_prompt?: string;
+  style_preset?: 'none' | 'cinematic' | 'realistic' | 'dreamy' | 'anime' | 'vintage' | 'noir';
+  enhance_enabled?: boolean;
+  enhance_model?: string;
+  seed?: number;
+  first_frame_mode?: 'auto' | 'manual' | 'none';
+  first_frame_url?: string;
+  
+  // Inline tag metadata
+  inline_tags?: { type: string; value: string }[];
+  tag_metadata?: Record<string, string>;
+  
+  // Scene metadata from tags
+  lighting?: string;
+  emotion?: string;
+  sfx_cue?: string;
 }
 
 export interface GeneratedTimeline {
