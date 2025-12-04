@@ -237,10 +237,26 @@ Create a compelling, visually rich story with ${estimatedSegments} distinct scen
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenAI API error:', errorText);
+      console.error('OpenAI API error:', response.status, errorText);
+      
+      // Parse the error to give a better message
+      let errorMessage = 'Failed to generate scenario from prompt';
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error?.message) {
+          errorMessage = errorData.error.message;
+        }
+        // Check for specific error codes
+        if (errorData.error?.code === 'invalid_api_key') {
+          errorMessage = 'Invalid OpenAI API key. Please check your API key in Admin > API Keys.';
+        }
+      } catch (e) {
+        // Use generic message
+      }
+      
       return c.json({
         success: false,
-        error: { code: 'AI_ERROR', message: 'Failed to generate scenario from prompt' },
+        error: { code: 'AI_ERROR', message: errorMessage },
       }, 500);
     }
 
