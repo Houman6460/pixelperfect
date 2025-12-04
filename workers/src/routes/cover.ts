@@ -89,7 +89,7 @@ coverRoutes.post('/cover/generate', authMiddleware(), async (c) => {
         emotional_tone: scenarioInfo.emotions[0] || 'dramatic',
         platforms,
       },
-      replicateKey
+      replicateKey || undefined
     );
 
     return c.json({

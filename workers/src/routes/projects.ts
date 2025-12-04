@@ -176,7 +176,7 @@ projectRoutes.post('/projects/:id/generate-metadata', authMiddleware(), async (c
     const openaiKey = await getApiKey(c.env, 'openai');
     const metadata = await generateMetadata(
       { project_id: projectId, scenario, style, target_platforms },
-      openaiKey
+      openaiKey || undefined
     );
 
     return c.json({

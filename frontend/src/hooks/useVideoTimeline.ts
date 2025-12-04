@@ -474,7 +474,7 @@ export function useVideoTimeline() {
     return JSON.stringify(timeline, null, 2);
   }, [timeline]);
 
-  // Import timeline from JSON
+  // Import timeline from JSON string
   const importTimeline = useCallback((jsonString: string) => {
     try {
       const imported = JSON.parse(jsonString) as VideoTimeline;
@@ -492,6 +492,68 @@ export function useVideoTimeline() {
       return imported;
     } catch (err) {
       setError('Failed to import timeline: Invalid JSON');
+      return null;
+    }
+  }, [saveToStorage]);
+
+  // Load timeline from scenario generation (object, not JSON string)
+  const loadFromScenario = useCallback((generatedTimeline: any) => {
+    try {
+      console.log('Loading timeline from scenario:', generatedTimeline);
+      
+      // Transform the generated timeline format to our internal format
+      const newTimeline: VideoTimeline = {
+        timeline_id: generatedTimeline.timeline_id || nanoid(12),
+        name: generatedTimeline.name || 'AI Generated Timeline',
+        description: generatedTimeline.description || '',
+        version: '1.0',
+        segments: (generatedTimeline.segments || []).map((seg: any, idx: number) => ({
+          segment_id: seg.segment_id || idx + 1,
+          duration_sec: seg.duration_sec || 5,
+          model: seg.model_id || seg.model || 'kling-2.5-pro',
+          prompt: seg.prompt_text || seg.prompt || '',
+          negative_prompt: seg.negative_prompt || '',
+          first_frame: seg.first_frame_url || null,
+          last_frame: seg.last_frame_url || null,
+          status: 'pending' as SegmentStatus,
+          transition: (seg.transition_type || seg.transition || 'fade') as TransitionType,
+          motion_profile: (seg.motion_profile || 'smooth') as MotionProfile,
+          camera_path: (seg.camera_path || 'static') as CameraPath,
+          priority: (seg.priority || 'standard') as RenderPriority,
+          style_preset: seg.style_preset,
+          aspect_ratio: seg.aspect_ratio,
+          resolution: seg.resolution,
+          scene_description: seg.scene_description,
+          character_refs: seg.character_refs,
+          style_refs: seg.style_refs,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })),
+        total_duration_sec: generatedTimeline.total_duration_sec || 0,
+        target_resolution: generatedTimeline.target_resolution || '1080p',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_template: false,
+        tags: [],
+        scenario_id: generatedTimeline.scenario_id,
+      };
+      
+      // Recalculate total duration
+      newTimeline.total_duration_sec = calculateTotalDuration(newTimeline.segments);
+      
+      console.log('Transformed timeline:', newTimeline);
+      
+      setTimeline(newTimeline);
+      setSavedTimelines(prev => {
+        const updated = [...prev, newTimeline];
+        saveToStorage(updated, newTimeline.timeline_id);
+        return updated;
+      });
+      
+      return newTimeline;
+    } catch (err) {
+      console.error('Failed to load timeline from scenario:', err);
+      setError('Failed to load generated timeline');
       return null;
     }
   }, [saveToStorage]);
@@ -527,6 +589,7 @@ export function useVideoTimeline() {
     updateTimelineProps,
     exportTimeline,
     importTimeline,
+    loadFromScenario, // Load timeline from scenario generation
     
     // Segment operations
     addSegment,

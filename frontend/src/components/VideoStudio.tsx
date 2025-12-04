@@ -543,6 +543,9 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
   const [inputVideo, setInputVideo] = useState<File | null>(null);
   const [inputVideoPreview, setInputVideoPreview] = useState<string | null>(null);
   
+  // Scenario-generated timeline
+  const [generatedTimeline, setGeneratedTimeline] = useState<any>(null);
+  
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -968,13 +971,18 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
             <ScenarioAssistant
               onTimelineGenerated={(timeline) => {
                 console.log('Timeline generated:', timeline);
+                // Store the generated timeline
+                setGeneratedTimeline(timeline);
                 // Switch to timeline tab after generation
                 setActiveTab("timeline");
               }}
             />
           </div>
         ) : activeTab === "timeline" ? (
-          <VideoTimelineEditor onClose={() => setActiveTab("text-to-video")} />
+          <VideoTimelineEditor 
+            onClose={() => setActiveTab("text-to-video")} 
+            initialTimeline={generatedTimeline}
+          />
         ) : (
         <div className="grid lg:grid-cols-[1fr_400px] gap-6">
           {/* Left Column - Model Selection & Controls */}

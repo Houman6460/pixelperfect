@@ -16,9 +16,10 @@ import PublishPanel from './PublishPanel';
 
 interface VideoTimelineEditorProps {
   onClose?: () => void;
+  initialTimeline?: any; // Timeline from scenario generation
 }
 
-export default function VideoTimelineEditor({ onClose }: VideoTimelineEditorProps) {
+export default function VideoTimelineEditor({ onClose, initialTimeline }: VideoTimelineEditorProps) {
   const {
     timeline,
     savedTimelines,
@@ -32,6 +33,7 @@ export default function VideoTimelineEditor({ onClose }: VideoTimelineEditorProp
     updateTimelineProps,
     exportTimeline,
     importTimeline,
+    loadFromScenario,
     addSegment,
     removeSegment,
     updateSegment,
@@ -41,6 +43,17 @@ export default function VideoTimelineEditor({ onClose }: VideoTimelineEditorProp
     setSegmentResult,
     getAdjacentSegments,
   } = useVideoTimeline();
+  
+  // Load initial timeline from scenario generation
+  const [hasLoadedInitial, setHasLoadedInitial] = React.useState(false);
+  
+  React.useEffect(() => {
+    if (initialTimeline && !hasLoadedInitial) {
+      console.log('Loading initial timeline from scenario:', initialTimeline);
+      loadFromScenario(initialTimeline);
+      setHasLoadedInitial(true);
+    }
+  }, [initialTimeline, hasLoadedInitial, loadFromScenario]);
 
   const [selectedSegmentId, setSelectedSegmentId] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);

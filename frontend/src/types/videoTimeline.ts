@@ -28,6 +28,13 @@ export interface TimelineSegment {
   error_message?: string;
   created_at: string;
   updated_at: string;
+  // Extended fields from scenario generation
+  aspect_ratio?: string;
+  resolution?: string;
+  scene_description?: string;
+  character_refs?: string[];
+  style_refs?: string[];
+  scene_number?: number;
 }
 
 // Full timeline structure
@@ -45,6 +52,7 @@ export interface VideoTimeline {
   user_id?: string;
   is_template?: boolean;
   tags?: string[];
+  scenario_id?: string; // Reference to the scenario that generated this timeline
 }
 
 // Model capability definition
