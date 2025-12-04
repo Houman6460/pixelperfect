@@ -3,6 +3,7 @@ import {
   Play, Pause, Trash2, Copy, GripVertical, ChevronDown, ChevronUp,
   AlertTriangle, Check, Clock, Loader2, Image, Video, Wand2,
   Camera, Zap, Settings2, Eye, RefreshCw, Download, Sparkles, ImagePlus,
+  Film, Palette, CameraIcon, Frame, Stars, Box, History, Wand,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -24,16 +25,16 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-// Style presets for AI frame generation
-const FRAME_STYLES = [
-  { id: 'cinematic', name: 'Cinematic', icon: '🎬' },
-  { id: 'anime', name: 'Anime', icon: '🎨' },
-  { id: 'realistic', name: 'Realistic', icon: '📷' },
-  { id: 'artistic', name: 'Artistic', icon: '🖼️' },
-  { id: 'nono-banna', name: 'Nono Banna', icon: '✨' },
-  { id: '3d-render', name: '3D Render', icon: '🎮' },
-  { id: 'vintage', name: 'Vintage', icon: '📼' },
-  { id: 'fantasy', name: 'Fantasy', icon: '🔮' },
+// Style presets for AI frame generation with Lucide icons
+const FRAME_STYLES: { id: string; name: string; Icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'cinematic', name: 'Cinematic', Icon: Film },
+  { id: 'anime', name: 'Anime', Icon: Palette },
+  { id: 'realistic', name: 'Realistic', Icon: CameraIcon },
+  { id: 'artistic', name: 'Artistic', Icon: Frame },
+  { id: 'nono-banna', name: 'Nono Banna', Icon: Stars },
+  { id: '3d-render', name: '3D Render', Icon: Box },
+  { id: 'vintage', name: 'Vintage', Icon: History },
+  { id: 'fantasy', name: 'Fantasy', Icon: Wand },
 ];
 import {
   TimelineSegment,
@@ -373,30 +374,36 @@ export default function SegmentCard({
                   <div className="relative">
                     <button
                       onClick={() => setShowStyleMenu(!showStyleMenu)}
-                      className="flex items-center gap-1 px-2 py-2 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-xs text-slate-300 transition"
+                      className="flex items-center gap-1.5 px-2 py-2 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-xs text-slate-300 transition"
                       title="Select style"
                     >
-                      <span>{FRAME_STYLES.find(s => s.id === frameStyle)?.icon}</span>
+                      {(() => {
+                        const SelectedIcon = FRAME_STYLES.find(s => s.id === frameStyle)?.Icon;
+                        return SelectedIcon ? <SelectedIcon className="w-3.5 h-3.5" /> : null;
+                      })()}
                       <ChevronDown className="w-3 h-3" />
                     </button>
                     
                     {showStyleMenu && (
                       <div className="absolute top-full mt-1 left-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[140px]">
-                        {FRAME_STYLES.map((style) => (
-                          <button
-                            key={style.id}
-                            onClick={() => {
-                              setFrameStyle(style.id);
-                              setShowStyleMenu(false);
-                            }}
-                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-slate-700/50 transition ${
-                              frameStyle === style.id ? 'text-purple-400 bg-purple-500/10' : 'text-slate-300'
-                            }`}
-                          >
-                            <span>{style.icon}</span>
-                            <span>{style.name}</span>
-                          </button>
-                        ))}
+                        {FRAME_STYLES.map((style) => {
+                          const StyleIcon = style.Icon;
+                          return (
+                            <button
+                              key={style.id}
+                              onClick={() => {
+                                setFrameStyle(style.id);
+                                setShowStyleMenu(false);
+                              }}
+                              className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-slate-700/50 transition ${
+                                frameStyle === style.id ? 'text-purple-400 bg-purple-500/10' : 'text-slate-300'
+                              }`}
+                            >
+                              <StyleIcon className="w-3.5 h-3.5" />
+                              <span>{style.name}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
