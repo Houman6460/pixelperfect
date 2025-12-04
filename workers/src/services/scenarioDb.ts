@@ -122,9 +122,6 @@ export class ScenarioRepository {
     targetDurationSec?: number;
     language?: string;
     styleHints?: Record<string, any>;
-    tagsJson?: any[];
-    storyboardImages?: any[];
-    visionModelId?: string;
   }): Promise<string> {
     const id = `sc_${nanoid(12)}`;
     const now = new Date().toISOString();
@@ -132,9 +129,8 @@ export class ScenarioRepository {
     await this.db.prepare(`
       INSERT INTO scenarios (
         id, user_id, title, original_text, target_model_id, target_duration_sec,
-        language, style_hints, tags_json, storyboard_images, vision_model_id,
-        status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
+        language, style_hints, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
     `).bind(
       id,
       data.userId,
@@ -144,9 +140,6 @@ export class ScenarioRepository {
       data.targetDurationSec || null,
       data.language || 'en',
       data.styleHints ? JSON.stringify(data.styleHints) : null,
-      data.tagsJson ? JSON.stringify(data.tagsJson) : null,
-      data.storyboardImages ? JSON.stringify(data.storyboardImages) : null,
-      data.visionModelId || null,
       now,
       now
     ).run();
@@ -554,7 +547,6 @@ export async function saveGeneratedPlanToDb(
     targetDurationSec: scenarioData.targetDurationSec,
     language: scenarioData.language,
     styleHints: scenarioData.styleHints,
-    tagsJson: scenarioData.tagsJson,
   });
 
   // Update with improved text if available
