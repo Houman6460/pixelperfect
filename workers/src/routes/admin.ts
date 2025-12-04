@@ -492,15 +492,31 @@ adminRoutes.put('/api-keys/:provider', async (c) => {
       return c.json({ success: false, error: 'API key is required' }, 400);
     }
     
+    const trimmedKey = apiKey.trim();
     const kvKeyName = isBackup ? `${config.kvKey}_backup` : config.kvKey;
-    await c.env.CACHE.put(kvKeyName, apiKey.trim());
+    
+    // Save to KV cache (primary storage for runtime)
+    await c.env.CACHE.put(kvKeyName, trimmedKey);
+    
+    // Also save to D1 for persistence (backup storage)
+    if (!isBackup) {
+      try {
+        await c.env.DB.prepare(`
+          INSERT OR REPLACE INTO admin_settings (key, value, updated_at)
+          VALUES (?, ?, datetime('now'))
+        `).bind(`${provider}_api_key`, trimmedKey).run();
+      } catch (dbError) {
+        console.error('Failed to save API key to D1:', dbError);
+        // Continue - KV save succeeded
+      }
+    }
     
     return c.json({
       success: true,
       message: `${config.name} ${isBackup ? 'backup ' : ''}API key saved`,
       data: {
         provider,
-        maskedKey: maskApiKey(apiKey.trim()),
+        maskedKey: maskApiKey(trimmedKey),
         isBackup,
       }
     });
@@ -561,9 +577,15 @@ adminRoutes.post('/api-keys/:provider/test', async (c) => {
       switch (provider) {
         case 'openai':
           const openaiRes = await fetch('https://api.openai.com/v1/models', {
-            headers: { 'Authorization': `Bearer ${keyToTest}` }
+            headers: { 'Authorization': `Bearer ${keyToTest.trim()}` }
           });
-          testResult = { success: openaiRes.ok, message: openaiRes.ok ? 'Connected successfully' : 'Invalid API key' };
+          if (openaiRes.ok) {
+            testResult = { success: true, message: 'Connected successfully' };
+          } else {
+            const errorData = await openaiRes.json().catch(() => ({})) as any;
+            const errorMsg = errorData?.error?.message || `HTTP ${openaiRes.status}`;
+            testResult = { success: false, message: `API Error: ${errorMsg}` };
+          }
           break;
         case 'anthropic':
           const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {

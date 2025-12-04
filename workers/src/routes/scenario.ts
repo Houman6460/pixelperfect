@@ -26,6 +26,7 @@ import {
   initializeStylesInKV,
   StyleProfile,
 } from '../services/styleProfiles';
+import { getApiKey } from '../services/apiKeyManager';
 
 type Variables = {
   user: User;
@@ -143,28 +144,8 @@ scenarioRoutes.post('/scenario/from-prompt', authMiddleware(), async (c) => {
       }, 400);
     }
 
-    // Try to get OpenAI API key from: 1) env variable, 2) KV cache, 3) admin_settings DB
-    let openaiKey: string | undefined = c.env.OPENAI_API_KEY;
-    if (!openaiKey) {
-      try {
-        // Check KV cache (user-provided keys from Admin panel)
-        const kvKey = await c.env.CACHE.get('api_key_openai');
-        if (kvKey) openaiKey = kvKey;
-      } catch (e) {
-        console.error('Failed to get API key from KV:', e);
-      }
-    }
-    if (!openaiKey) {
-      try {
-        // Fallback to admin_settings DB
-        const setting = await c.env.DB.prepare(
-          "SELECT value FROM admin_settings WHERE key = 'openai_api_key'"
-        ).first<{ value: string }>();
-        if (setting?.value) openaiKey = setting.value;
-      } catch (e) {
-        console.error('Failed to get API key from DB:', e);
-      }
-    }
+    // Get OpenAI API key using centralized manager (checks KV, env, DB)
+    const openaiKey = await getApiKey(c.env, 'openai');
     
     if (!openaiKey) {
       return c.json({
