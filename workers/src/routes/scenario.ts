@@ -16,6 +16,16 @@ import {
   GenerationPlanRepository,
   saveGeneratedPlanToDb 
 } from '../services/scenarioDb';
+import {
+  getAllStyleProfiles,
+  getGroupedStyleProfiles,
+  getStyleProfileById,
+  buildStyleAwareSystemPrompt,
+  buildStylePromptAdditions,
+  mapStyleToSegmentSettings,
+  initializeStylesInKV,
+  StyleProfile,
+} from '../services/styleProfiles';
 
 type Variables = {
   user: User;
@@ -56,6 +66,57 @@ scenarioRoutes.get('/scenario/models', async (c) => {
   }
 });
 
+// GET /scenario/styles - Get all available style profiles
+scenarioRoutes.get('/scenario/styles', async (c) => {
+  try {
+    const styles = getAllStyleProfiles();
+    const grouped = getGroupedStyleProfiles();
+    
+    return c.json({
+      success: true,
+      data: {
+        styles: styles.map(s => ({
+          id: s.id,
+          type: s.type,
+          label: s.label,
+          description: s.description,
+          icon: s.icon,
+          pacing: s.pacing,
+          visual_keywords: s.visual_keywords,
+        })),
+        grouped: {
+          director: grouped.director.map(s => ({ id: s.id, label: s.label, description: s.description, icon: s.icon })),
+          animation: grouped.animation.map(s => ({ id: s.id, label: s.label, description: s.description, icon: s.icon })),
+          cinematic: grouped.cinematic.map(s => ({ id: s.id, label: s.label, description: s.description, icon: s.icon })),
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Get styles error:', error);
+    return c.json({ success: false, error: 'Failed to get styles' }, 500);
+  }
+});
+
+// GET /scenario/styles/:id - Get a specific style profile
+scenarioRoutes.get('/scenario/styles/:id', async (c) => {
+  try {
+    const styleId = c.req.param('id');
+    const style = getStyleProfileById(styleId);
+    
+    if (!style) {
+      return c.json({ success: false, error: 'Style not found' }, 404);
+    }
+    
+    return c.json({
+      success: true,
+      data: style,
+    });
+  } catch (error) {
+    console.error('Get style error:', error);
+    return c.json({ success: false, error: 'Failed to get style' }, 500);
+  }
+});
+
 // ==================== AUTHENTICATED ENDPOINTS ====================
 
 // POST /scenario/from-prompt - Generate full scenario from a simple concept prompt
@@ -70,6 +131,8 @@ scenarioRoutes.post('/scenario/from-prompt', authMiddleware(), async (c) => {
       style_hints,
       genre,
       mood,
+      style_id, // NEW: Director/animation/cinematic style
+      custom_style_prompt, // NEW: Custom style description
       ai_model_id = 'gpt-4o',
     } = body;
 
@@ -95,13 +158,19 @@ scenarioRoutes.post('/scenario/from-prompt', authMiddleware(), async (c) => {
     const targetDuration = target_duration_sec || 60;
     const estimatedSegments = Math.ceil(targetDuration / maxSegmentDuration);
 
+    // Get style profile if selected
+    const styleProfile = style_id ? getStyleProfileById(style_id) : null;
+    const styleInstructions = style_id 
+      ? buildStyleAwareSystemPrompt(style_id, custom_style_prompt)
+      : (custom_style_prompt ? `\n\nCUSTOM STYLE:\n${custom_style_prompt}` : '');
+
     // Build prompt for scenario generation
     const systemPrompt = `You are a professional screenwriter and cinematic director. 
 Your task is to transform a simple concept into a full cinematic scenario with rich visual details.
 
 OUTPUT FORMAT:
 - Write a detailed narrative scenario divided into clear scenes
-- Use inline tags for cinematic directions: [camera: ...], [lighting: ...], [mood: ...], [fx: ...], [sfx: ...], [transition: ...]
+- Use inline tags for cinematic directions: [camera: ...], [lighting: ...], [mood: ...], [fx: ...], [sfx: ...], [transition: ...], [style: ...]
 - Each scene should be suitable for a ${maxSegmentDuration}-second video segment
 - Total scenario should be paced for approximately ${targetDuration} seconds (${estimatedSegments} segments)
 - Include character descriptions, environment details, and emotional beats
@@ -111,17 +180,19 @@ STYLE GUIDANCE:
 ${genre ? `- Genre: ${genre}` : '- Genre: Cinematic'}
 ${mood ? `- Mood: ${mood}` : '- Mood: Compelling'}
 ${style_hints ? `- Style notes: ${JSON.stringify(style_hints)}` : ''}
+${styleInstructions}
 
 INLINE TAG EXAMPLES:
 [camera: wide establishing shot] [lighting: golden hour] [mood: mysterious]
 [camera: close-up on face] [fx: lens flare] [sfx: dramatic music swell]
-[transition: slow fade] [camera: tracking shot] [lighting: neon-lit]`;
+[transition: slow fade] [camera: tracking shot] [lighting: neon-lit]
+${styleProfile ? `[style: ${styleProfile.label}] [color-grade: ${styleProfile.color_grade}]` : ''}`;
 
     const userPrompt = `Transform this concept into a full cinematic scenario:
 
 "${concept_prompt}"
 
-Create a compelling, visually rich story with ${estimatedSegments} distinct scenes, each suitable for a ${maxSegmentDuration}-second AI-generated video clip. Include inline tags for camera, lighting, mood, and effects.`;
+Create a compelling, visually rich story with ${estimatedSegments} distinct scenes, each suitable for a ${maxSegmentDuration}-second AI-generated video clip. Include inline tags for camera, lighting, mood, and effects.${styleProfile ? ` Apply the ${styleProfile.label} style consistently throughout.` : ''}`;
 
     // Call OpenAI to generate the scenario
     const startTime = Date.now();

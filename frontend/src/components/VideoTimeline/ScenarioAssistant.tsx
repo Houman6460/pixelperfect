@@ -145,6 +145,20 @@ export function ScenarioAssistant({
   const [conceptPrompt, setConceptPrompt] = useState('');
   const [isGeneratingFromPrompt, setIsGeneratingFromPrompt] = useState(false);
   const [showConceptPrompt, setShowConceptPrompt] = useState(true);
+  
+  // Style Profile (director/animation/cinematic style)
+  const [selectedStyleId, setSelectedStyleId] = useState<string>('');
+  const [customStylePrompt, setCustomStylePrompt] = useState('');
+  const [showStyleSelector, setShowStyleSelector] = useState(false);
+  const [availableStyles, setAvailableStyles] = useState<{
+    director: { id: string; label: string; description: string }[];
+    animation: { id: string; label: string; description: string }[];
+    cinematic: { id: string; label: string; description: string }[];
+  }>({
+    director: [],
+    animation: [],
+    cinematic: [],
+  });
 
   // Get auth token
   const getAuthHeaders = () => {
@@ -168,6 +182,21 @@ export function ScenarioAssistant({
       }
     };
     fetchModels();
+  }, []);
+
+  // Fetch available style profiles
+  useEffect(() => {
+    const fetchStyles = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/v1/scenario/styles`);
+        if (response.data.success && response.data.data.grouped) {
+          setAvailableStyles(response.data.data.grouped);
+        }
+      } catch (err) {
+        console.error('Failed to fetch styles:', err);
+      }
+    };
+    fetchStyles();
   }, []);
 
   // Handle storyboard image upload
@@ -228,6 +257,8 @@ export function ScenarioAssistant({
           target_duration_sec: targetDuration,
           genre: 'cinematic',
           mood: 'compelling',
+          style_id: selectedStyleId || undefined,
+          custom_style_prompt: customStylePrompt || undefined,
         },
         { headers: getAuthHeaders() }
       );
@@ -682,6 +713,147 @@ The traveler walks through the quiet streets... [camera: tracking][pace: moderat
             <span>10m</span>
           </div>
         </div>
+      </div>
+
+      {/* Style Profile Selector */}
+      <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-xl border border-amber-500/30">
+        <button
+          onClick={() => setShowStyleSelector(!showStyleSelector)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-medium text-slate-200">Style Profile</span>
+            <span className="text-xs text-amber-400/70">(optional)</span>
+            {selectedStyleId && (
+              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-xs">
+                {availableStyles.director.find(s => s.id === selectedStyleId)?.label ||
+                 availableStyles.animation.find(s => s.id === selectedStyleId)?.label ||
+                 availableStyles.cinematic.find(s => s.id === selectedStyleId)?.label ||
+                 selectedStyleId}
+              </span>
+            )}
+          </div>
+          {showStyleSelector ? (
+            <ChevronUp className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          )}
+        </button>
+        
+        {showStyleSelector && (
+          <div className="mt-3 space-y-4">
+            <p className="text-xs text-slate-400">
+              Select a director, animation, or cinematic style. AI will apply it consistently across your entire scenario and timeline.
+            </p>
+            
+            {/* Style Type Tabs */}
+            <div className="space-y-3">
+              {/* Director Styles */}
+              {availableStyles.director.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-slate-400 mb-2 flex items-center gap-1">
+                    🎬 Director Styles
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableStyles.director.map((style) => (
+                      <button
+                        key={style.id}
+                        onClick={() => setSelectedStyleId(selectedStyleId === style.id ? '' : style.id)}
+                        className={`p-2 rounded-lg border text-left transition ${
+                          selectedStyleId === style.id
+                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-200'
+                            : 'bg-slate-800/30 border-slate-700/50 text-slate-300 hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <div className="text-xs font-medium">{style.label}</div>
+                        <div className="text-[10px] text-slate-500 line-clamp-1">{style.description}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Animation Styles */}
+              {availableStyles.animation.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-slate-400 mb-2 flex items-center gap-1">
+                    🎨 Animation Styles
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableStyles.animation.map((style) => (
+                      <button
+                        key={style.id}
+                        onClick={() => setSelectedStyleId(selectedStyleId === style.id ? '' : style.id)}
+                        className={`p-2 rounded-lg border text-left transition ${
+                          selectedStyleId === style.id
+                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-200'
+                            : 'bg-slate-800/30 border-slate-700/50 text-slate-300 hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <div className="text-xs font-medium">{style.label}</div>
+                        <div className="text-[10px] text-slate-500 line-clamp-1">{style.description}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Cinematic Styles */}
+              {availableStyles.cinematic.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-slate-400 mb-2 flex items-center gap-1">
+                    🎞️ Cinematic Styles
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableStyles.cinematic.map((style) => (
+                      <button
+                        key={style.id}
+                        onClick={() => setSelectedStyleId(selectedStyleId === style.id ? '' : style.id)}
+                        className={`p-2 rounded-lg border text-left transition ${
+                          selectedStyleId === style.id
+                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-200'
+                            : 'bg-slate-800/30 border-slate-700/50 text-slate-300 hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <div className="text-xs font-medium">{style.label}</div>
+                        <div className="text-[10px] text-slate-500 line-clamp-1">{style.description}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Custom Style Prompt */}
+            <div className="pt-3 border-t border-slate-700/50">
+              <label className="text-xs font-medium text-slate-400 mb-1 block">
+                Custom Style Description (optional)
+              </label>
+              <textarea
+                value={customStylePrompt}
+                onChange={(e) => setCustomStylePrompt(e.target.value)}
+                placeholder="Describe your own visual style: slow motion, specific color palette, unique camera movements..."
+                className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                rows={2}
+              />
+            </div>
+            
+            {/* Clear Selection */}
+            {(selectedStyleId || customStylePrompt) && (
+              <button
+                onClick={() => {
+                  setSelectedStyleId('');
+                  setCustomStylePrompt('');
+                }}
+                className="text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
+              >
+                <X className="w-3 h-3" />
+                Clear style selection
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}
