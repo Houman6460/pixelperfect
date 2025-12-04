@@ -495,9 +495,11 @@ export const projectsApi = {
   generateMetadata: (projectId: string) => api.post(`/v1/projects/${projectId}/generate-metadata`),
   
   // Publishing
-  getPublishJobs: (projectId: string) => api.get(`/v1/projects/${projectId}/publish-jobs`),
+  getPublishJobs: (projectId?: string) => api.get("/v1/publishing/jobs", { params: projectId ? { project_id: projectId } : undefined }),
+  getPublishJob: (jobId: string) => api.get(`/v1/publishing/jobs/${jobId}`),
+  retryPublishJob: (jobId: string) => api.post(`/v1/publishing/jobs/${jobId}/retry`),
   createPublishJob: (projectId: string, platforms: string[]) =>
-    api.post(`/v1/projects/${projectId}/publish`, { platforms }),
+    api.post("/v1/publishing/publish", { project_id: projectId, platforms }),
 };
 
 // Payment API

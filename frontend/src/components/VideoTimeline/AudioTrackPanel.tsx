@@ -53,8 +53,11 @@ export const AudioTrackPanel: React.FC<AudioTrackPanelProps> = ({
         setTrack(response.data.data);
         onAudioChange?.(response.data.data);
       }
-    } catch (error) {
-      console.error('Failed to load audio track:', error);
+    } catch (error: any) {
+      // 404 is expected if no audio track exists yet - silently ignore
+      if (error?.response?.status !== 404) {
+        console.error('Failed to load audio track:', error);
+      }
     } finally {
       setLoading(false);
     }

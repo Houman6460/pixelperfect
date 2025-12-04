@@ -88,8 +88,11 @@ export const PublishPanel: React.FC<PublishPanelProps> = ({
       if (response.data.success) {
         setPublishJobs(response.data.data || []);
       }
-    } catch (error) {
-      console.error('Failed to load publish jobs:', error);
+    } catch (error: any) {
+      // 404 is expected if no publish jobs exist yet - silently ignore
+      if (error?.response?.status !== 404) {
+        console.error('Failed to load publish jobs:', error);
+      }
     }
   };
 
