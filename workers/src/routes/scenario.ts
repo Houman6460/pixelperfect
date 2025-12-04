@@ -79,7 +79,7 @@ scenarioRoutes.post('/scenario/parse', authMiddleware(), async (c) => {
   }
 });
 
-// POST /scenario/improve - Improve scenario with AI (supports vision for storyboards)
+// POST /scenario/improve - Improve scenario with AI (supports vision for storyboards and inline tags)
 scenarioRoutes.post('/scenario/improve', authMiddleware(), async (c) => {
   try {
     const body = await c.req.json();
@@ -92,6 +92,9 @@ scenarioRoutes.post('/scenario/improve', authMiddleware(), async (c) => {
       // Vision AI for storyboard analysis
       vision_model_id,
       storyboard_images, // Array of { data: base64, caption?: string }
+      // Inline scenario tags
+      inline_tags, // Array of { type: string, value: string, offset: number }
+      preserve_tags, // Boolean to tell AI to preserve existing tags
     } = body;
 
     if (!scenario_text && (!storyboard_images || storyboard_images.length === 0)) {
@@ -122,16 +125,37 @@ scenarioRoutes.post('/scenario/improve', authMiddleware(), async (c) => {
       }
     }
     
+    // Build style hints with tag preservation instruction
+    const enhancedStyleHints = {
+      ...style_hints,
+      preserve_inline_tags: preserve_tags,
+      inline_tag_instructions: inline_tags?.length > 0 
+        ? `IMPORTANT: Preserve all inline markup tags in the format [category: value]. These tags are: ${inline_tags.map((t: any) => `[${t.type}: ${t.value}]`).join(', ')}. Keep them in appropriate positions in the improved text. You may also suggest NEW tags where beneficial using the same format.`
+        : undefined,
+    };
+    
     const result = await improveScenario(
       {
         scenario_text: enhancedScenario,
         target_duration_sec,
         target_model_id,
         language,
-        style_hints,
+        style_hints: enhancedStyleHints,
       },
       openaiKey
     );
+
+    // Parse tags from the improved scenario
+    const tagRegex = /\[(\w+):\s*([^\]]+)\]/g;
+    const resultTags: { type: string; value: string; offset: number }[] = [];
+    let match;
+    while ((match = tagRegex.exec(result.improved_scenario)) !== null) {
+      resultTags.push({
+        type: match[1].toLowerCase(),
+        value: match[2].trim(),
+        offset: match.index,
+      });
+    }
 
     return c.json({
       success: true,
@@ -139,6 +163,8 @@ scenarioRoutes.post('/scenario/improve', authMiddleware(), async (c) => {
         ...result,
         storyboard_analyzed: storyboard_images?.length > 0,
         vision_model_used: storyboard_images?.length > 0 ? vision_model_id : undefined,
+        inline_tags: resultTags,
+        tags_preserved: preserve_tags && inline_tags?.length > 0,
       },
     });
   } catch (error: any) {
@@ -309,7 +335,7 @@ Return the improved scenario text that merges the original text with insights fr
   }
 }
 
-// POST /scenario/generate-plan - Generate timeline from scenario
+// POST /scenario/generate-plan - Generate timeline from scenario (supports inline tags)
 scenarioRoutes.post('/scenario/generate-plan', authMiddleware(), async (c) => {
   try {
     const body = await c.req.json();
@@ -319,6 +345,7 @@ scenarioRoutes.post('/scenario/generate-plan', authMiddleware(), async (c) => {
       target_model_id,
       language,
       options,
+      inline_tags, // Array of { type: string, value: string, offset: number }
     } = body;
 
     if (!scenario_text || !target_model_id) {
@@ -329,6 +356,15 @@ scenarioRoutes.post('/scenario/generate-plan', authMiddleware(), async (c) => {
     }
 
     const openaiKey = c.env.OPENAI_API_KEY;
+    
+    // Build enhanced options with inline tag instructions
+    const enhancedOptions = {
+      ...options,
+      inline_tags: inline_tags,
+      tag_instructions: inline_tags?.length > 0 
+        ? buildTagInstructions(inline_tags)
+        : undefined,
+    };
 
     const result = await generatePlan(
       {
@@ -336,14 +372,30 @@ scenarioRoutes.post('/scenario/generate-plan', authMiddleware(), async (c) => {
         target_duration_sec: target_duration_sec || 60,
         target_model_id,
         language,
-        options,
+        options: enhancedOptions,
       },
       openaiKey
     );
+    
+    // Enhance segments with tag metadata
+    if (result.timeline?.segments && inline_tags?.length > 0) {
+      result.timeline.segments = result.timeline.segments.map((segment: any, idx: number) => {
+        // Find tags that apply to this segment based on text offset proximity
+        const segmentTags = findTagsForSegment(inline_tags, scenario_text, idx, result.timeline.segments.length);
+        return {
+          ...segment,
+          inline_tags: segmentTags,
+          tag_metadata: extractTagMetadata(segmentTags),
+        };
+      });
+    }
 
     return c.json({
       success: true,
-      data: result,
+      data: {
+        ...result,
+        inline_tags_used: inline_tags?.length > 0,
+      },
     });
   } catch (error: any) {
     console.error('Generate plan error:', error);
@@ -353,6 +405,74 @@ scenarioRoutes.post('/scenario/generate-plan', authMiddleware(), async (c) => {
     }, 500);
   }
 });
+
+// Helper function to build tag instructions for timeline generation
+function buildTagInstructions(tags: { type: string; value: string; offset: number }[]): string {
+  const tagsByType: Record<string, string[]> = {};
+  tags.forEach(tag => {
+    if (!tagsByType[tag.type]) tagsByType[tag.type] = [];
+    if (!tagsByType[tag.type].includes(tag.value)) {
+      tagsByType[tag.type].push(tag.value);
+    }
+  });
+  
+  const instructions: string[] = [];
+  
+  if (tagsByType.camera) {
+    instructions.push(`Camera movements to use: ${tagsByType.camera.join(', ')}`);
+  }
+  if (tagsByType.lighting) {
+    instructions.push(`Lighting styles specified: ${tagsByType.lighting.join(', ')}`);
+  }
+  if (tagsByType.mood) {
+    instructions.push(`Mood/atmosphere: ${tagsByType.mood.join(', ')}`);
+  }
+  if (tagsByType.fx) {
+    instructions.push(`Visual effects to apply: ${tagsByType.fx.join(', ')}`);
+  }
+  if (tagsByType.sfx) {
+    instructions.push(`Audio/sound cues: ${tagsByType.sfx.join(', ')}`);
+  }
+  if (tagsByType.pace) {
+    instructions.push(`Pacing guidance: ${tagsByType.pace.join(', ')}`);
+  }
+  if (tagsByType.style) {
+    instructions.push(`Visual style: ${tagsByType.style.join(', ')}`);
+  }
+  if (tagsByType.transition) {
+    instructions.push(`Transitions: ${tagsByType.transition.join(', ')}`);
+  }
+  
+  return instructions.join('. ');
+}
+
+// Helper function to find tags that apply to a segment
+function findTagsForSegment(
+  tags: { type: string; value: string; offset: number }[],
+  scenarioText: string,
+  segmentIndex: number,
+  totalSegments: number
+): { type: string; value: string }[] {
+  // Divide the scenario into segments and find which tags fall within each
+  const segmentLength = Math.floor(scenarioText.length / totalSegments);
+  const segmentStart = segmentIndex * segmentLength;
+  const segmentEnd = segmentIndex === totalSegments - 1 ? scenarioText.length : (segmentIndex + 1) * segmentLength;
+  
+  return tags
+    .filter(tag => tag.offset >= segmentStart && tag.offset < segmentEnd)
+    .map(tag => ({ type: tag.type, value: tag.value }));
+}
+
+// Helper function to extract structured metadata from tags
+function extractTagMetadata(tags: { type: string; value: string }[]): Record<string, string> {
+  const metadata: Record<string, string> = {};
+  tags.forEach(tag => {
+    if (!metadata[tag.type]) {
+      metadata[tag.type] = tag.value;
+    }
+  });
+  return metadata;
+}
 
 // POST /scenario/full-pipeline - Complete pipeline: improve → parse → generate plan
 scenarioRoutes.post('/scenario/full-pipeline', authMiddleware(), async (c) => {

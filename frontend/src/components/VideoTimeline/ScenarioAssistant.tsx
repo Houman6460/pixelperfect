@@ -28,7 +28,9 @@ import {
   ImagePlus,
   X,
   Brain,
+  Tag,
 } from 'lucide-react';
+import { ScenarioTagEditor, parseTags, ParsedTag, TAG_CATEGORIES } from './ScenarioTagEditor';
 
 // API Base URL
 const API_BASE = import.meta.env.VITE_API_URL || 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev';
@@ -135,6 +137,9 @@ export function ScenarioAssistant({
   const [storyboardImages, setStoryboardImages] = useState<StoryboardImage[]>([]);
   const [visionModelId, setVisionModelId] = useState('gpt-4o');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Scenario tags (parsed from inline markup)
+  const [scenarioTags, setScenarioTags] = useState<ParsedTag[]>([]);
 
   // Get auth token
   const getAuthHeaders = () => {
@@ -224,6 +229,13 @@ export function ScenarioAssistant({
       // Convert images to base64 if any
       const images = storyboardImages.length > 0 ? await imagesToBase64() : undefined;
       
+      // Parse inline tags from scenario
+      const inlineTags = parseTags(scenario).map(tag => ({
+        type: tag.category,
+        value: tag.value,
+        offset: tag.start,
+      }));
+      
       const response = await axios.post(
         `${API_BASE}/api/v1/scenario/improve`,
         {
@@ -233,6 +245,9 @@ export function ScenarioAssistant({
           // Vision AI settings
           vision_model_id: storyboardImages.length > 0 ? visionModelId : undefined,
           storyboard_images: images,
+          // Inline scenario tags
+          inline_tags: inlineTags.length > 0 ? inlineTags : undefined,
+          preserve_tags: true, // Tell AI to preserve existing tags
           style_hints: {
             genre: 'cinematic',
             mood: 'compelling',
@@ -266,16 +281,27 @@ export function ScenarioAssistant({
     setWarnings([]);
 
     try {
+      // Parse inline tags for timeline generation
+      const inlineTags = parseTags(scenario).map(tag => ({
+        type: tag.category,
+        value: tag.value,
+        offset: tag.start,
+      }));
+      
       const response = await axios.post(
         `${API_BASE}/api/v1/scenario/generate-plan`,
         {
           scenario_text: scenario,
           target_duration_sec: targetDuration,
           target_model_id: selectedModelId,
+          // Inline tags to inform segment generation
+          inline_tags: inlineTags.length > 0 ? inlineTags : undefined,
           options: {
             enable_frame_chaining: true,
             style_consistency: true,
             character_consistency: true,
+            // Use inline tags for generation
+            use_inline_tags: inlineTags.length > 0,
           },
         },
         { headers: getAuthHeaders() }
@@ -322,42 +348,72 @@ export function ScenarioAssistant({
         </div>
       </div>
 
-      {/* Scenario Input */}
+      {/* Scenario Input with Inline Tag Editor */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label htmlFor="scenario-input" className="text-sm font-medium text-slate-300">
+          <label htmlFor="scenario-input" className="text-sm font-medium text-slate-300 flex items-center gap-2">
+            <Tag className="w-4 h-4" />
             Your Scenario
+            <span className="text-xs text-purple-400 font-normal">(type [ to add tags)</span>
           </label>
-          <span className="text-xs text-slate-500">{scenario.length} characters</span>
         </div>
-        <textarea
-          id="scenario-input"
+        <ScenarioTagEditor
           value={scenario}
-          onChange={(e) => {
-            setScenario(e.target.value);
+          onChange={(newValue) => {
+            setScenario(newValue);
             setImprovedScenario(null);
             setTimeline(null);
           }}
-          placeholder={`Write your full story here...
+          onTagsChange={setScenarioTags}
+          placeholder={`Write your cinematic story with inline tags...
 
 Example:
-SCENE 1: A misty mountain ridge at dawn.
+SCENE 1: A misty mountain ridge at dawn. [lighting: golden-hour][camera: wide][mood: serene]
 A lone traveler stands at the edge, looking out at the vast landscape below.
 
-Traveler: "I've come so far..."
+Traveler: "I've come so far..." [mood: melancholic][pace: slow]
 
-The camera slowly pans across the horizon as the sun begins to rise, casting golden light through the clouds.
+The camera slowly pans across the horizon [camera: pan-right][fx: lens-flare] as the sun begins to rise.
 
-SCENE 2: A small village in the valley.
-The traveler walks through the quiet streets...`}
-          rows={12}
-          className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 font-mono text-sm leading-relaxed"
+SCENE 2: A small village in the valley. [lighting: overcast][sfx: distant-wind]
+The traveler walks through the quiet streets... [camera: tracking][pace: moderate]
+
+💡 Click tags to edit • Right-click for options • Type [ to add new tags`}
+          minRows={14}
         />
+        {/* Tag summary */}
+        {scenarioTags.length > 0 && (
+          <div className="mt-3 p-3 bg-slate-800/30 rounded-lg border border-slate-700/50">
+            <div className="text-xs text-slate-400 mb-2 flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              Scene Instructions ({scenarioTags.length} tags detected)
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(
+                scenarioTags.reduce((acc, tag) => {
+                  acc[tag.category] = (acc[tag.category] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>)
+              ).map(([category, count]) => {
+                const cat = TAG_CATEGORIES.find(c => c.id === category);
+                return (
+                  <span 
+                    key={category}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${cat?.bgColor || 'bg-slate-500/20'} ${cat?.color || 'text-slate-300'}`}
+                  >
+                    {cat && <cat.icon className="w-3 h-3" />}
+                    {category}: {count}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {/* Success notification */}
         {improvementSuccess && (
           <div className="flex items-center gap-2 mt-2 text-xs text-green-400">
             <Check className="w-3 h-3" />
-            Scenario improved successfully
+            Scenario improved successfully (tags preserved)
           </div>
         )}
       </div>

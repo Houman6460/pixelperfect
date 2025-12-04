@@ -12,3 +12,7 @@ export { default as ResolutionSelector } from './ResolutionSelector';
 export { default as EnhancementPanel } from './EnhancementPanel';
 export { default as AudioTrackPanel } from './AudioTrackPanel';
 export { default as PublishPanel } from './PublishPanel';
+
+// Scenario Tag Editor with inline markup
+export { ScenarioTagEditor, TAG_CATEGORIES, parseTags } from './ScenarioTagEditor';
+export type { ParsedTag, TagCategory } from './ScenarioTagEditor';
