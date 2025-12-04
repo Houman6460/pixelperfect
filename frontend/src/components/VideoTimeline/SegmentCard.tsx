@@ -14,6 +14,7 @@ import {
   CameraPath,
 } from '../../types/videoTimeline';
 import ModelSelector from './ModelSelector';
+import EnhancementPanel from './EnhancementPanel';
 
 interface SegmentCardProps {
   segment: TimelineSegment;
@@ -81,6 +82,8 @@ export default function SegmentCard({
   const [isExpanded, setIsExpanded] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
+  const [enhanceEnabled, setEnhanceEnabled] = useState(false);
+  const [enhanceModel, setEnhanceModel] = useState<string | undefined>();
   
   const model = MODEL_CAPABILITY_REGISTRY[segment.model];
   const statusStyle = STATUS_STYLES[segment.status];
@@ -363,6 +366,18 @@ export default function SegmentCard({
           {/* Advanced Settings */}
           {showAdvanced && (
             <div className="p-3 bg-slate-900/30 rounded-lg space-y-3">
+              {/* AI Enhancement */}
+              <EnhancementPanel
+                segmentId={String(segment.segment_id)}
+                enabled={enhanceEnabled}
+                modelId={enhanceModel}
+                onEnableChange={(enabled, modelId) => {
+                  setEnhanceEnabled(enabled);
+                  setEnhanceModel(modelId);
+                }}
+                compact={false}
+              />
+              
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">Negative Prompt</label>
                 <input

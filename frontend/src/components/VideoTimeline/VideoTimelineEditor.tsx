@@ -1,13 +1,18 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   Film, Plus, Save, Settings, Info, AlertTriangle, ChevronDown, ChevronUp,
-  Sparkles, Loader2, Clock, Zap, CheckCircle, XCircle,
+  Sparkles, Loader2, Clock, Zap, CheckCircle, XCircle, Music, Share2, Wand2,
 } from 'lucide-react';
 import { useVideoTimeline, getModelCapability, getAvailableModels } from '../../hooks/useVideoTimeline';
 import { VideoTimeline, TimelineSegment, MODEL_CAPABILITY_REGISTRY } from '../../types/videoTimeline';
 import SegmentCard from './SegmentCard';
 import TimelineTrack from './TimelineTrack';
 import TimelineControls from './TimelineControls';
+import AspectRatioSelector from './AspectRatioSelector';
+import ResolutionSelector from './ResolutionSelector';
+import AudioTrackPanel from './AudioTrackPanel';
+import EnhancementPanel from './EnhancementPanel';
+import PublishPanel from './PublishPanel';
 
 interface VideoTimelineEditorProps {
   onClose?: () => void;
@@ -44,6 +49,9 @@ export default function VideoTimelineEditor({ onClose }: VideoTimelineEditorProp
   const [hasChanges, setHasChanges] = useState(false);
   const [showSavedTimelines, setShowSavedTimelines] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAudioPanel, setShowAudioPanel] = useState(false);
+  const [showPublishPanel, setShowPublishPanel] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<string>('16:9');
   const [generationQueue, setGenerationQueue] = useState<number[]>([]);
 
   // Track changes
@@ -269,23 +277,27 @@ export default function VideoTimelineEditor({ onClose }: VideoTimelineEditorProp
 
       {/* Timeline Settings */}
       {showSettings && (
-        <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/50 space-y-4">
+        <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/50 space-y-6">
           <h3 className="text-sm font-medium text-slate-400">Timeline Settings</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Target Resolution</label>
-              <select
-                value={timeline?.target_resolution || '1080p'}
-                onChange={(e) => updateTimelineProps({ target_resolution: e.target.value as any })}
-                className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-sm text-white"
-                aria-label="Target resolution"
-              >
-                <option value="480p">480p</option>
-                <option value="720p">720p</option>
-                <option value="1080p">1080p</option>
-                <option value="4k">4K</option>
-              </select>
-            </div>
+          
+          {/* Aspect Ratio Selector */}
+          <AspectRatioSelector
+            value={aspectRatio}
+            onChange={(aspect) => {
+              setAspectRatio(aspect);
+              updateTimelineProps({ aspect_ratio: aspect } as any);
+            }}
+            showPlatformHints={true}
+          />
+          
+          {/* Resolution Selector */}
+          <ResolutionSelector
+            value={timeline?.target_resolution || '1080p'}
+            aspectRatio={aspectRatio}
+            onChange={(res) => updateTimelineProps({ target_resolution: res as any })}
+          />
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs text-slate-500 mb-1">Global Style</label>
               <input
@@ -321,6 +333,45 @@ export default function VideoTimelineEditor({ onClose }: VideoTimelineEditorProp
             </div>
           </div>
         </div>
+      )}
+
+      {/* Feature Panels */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setShowAudioPanel(!showAudioPanel)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+            showAudioPanel ? 'bg-green-500/20 text-green-300 border border-green-500/50' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-700/50'
+          }`}
+        >
+          <Music className="w-4 h-4" />
+          <span className="text-sm">Audio Track</span>
+        </button>
+        <button
+          onClick={() => setShowPublishPanel(!showPublishPanel)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+            showPublishPanel ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:bg-slate-700/50'
+          }`}
+        >
+          <Share2 className="w-4 h-4" />
+          <span className="text-sm">Publish</span>
+        </button>
+      </div>
+
+      {/* Audio Track Panel */}
+      {showAudioPanel && timeline && (
+        <AudioTrackPanel
+          timelineId={timeline.timeline_id}
+          videoDuration={timeline.total_duration_sec}
+        />
+      )}
+
+      {/* Publish Panel */}
+      {showPublishPanel && timeline && (
+        <PublishPanel
+          projectId={timeline.timeline_id}
+          currentAspect={aspectRatio}
+          videoDuration={timeline.total_duration_sec}
+        />
       )}
 
       {/* Controls */}
