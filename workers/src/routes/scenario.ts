@@ -387,9 +387,17 @@ scenarioRoutes.post('/scenario/improve', authMiddleware(), async (c) => {
       }, 400);
     }
 
-    const openaiKey = c.env.OPENAI_API_KEY;
-    const googleKey = c.env.GOOGLE_API_KEY;
-    const anthropicKey = c.env.ANTHROPIC_API_KEY;
+    // Get API keys using centralized manager
+    const openaiKey = await getApiKey(c.env, 'openai');
+    const googleKey = await getApiKey(c.env, 'google');
+    const anthropicKey = await getApiKey(c.env, 'anthropic');
+    
+    if (!openaiKey) {
+      return c.json({
+        success: false,
+        error: { code: 'CONFIG_ERROR', message: 'AI service not configured. Please set your OpenAI API key in Admin > API Keys.' },
+      }, 500);
+    }
     
     // If storyboard images provided, analyze them first with vision AI
     let enhancedScenario = scenario_text || '';
@@ -399,7 +407,7 @@ scenarioRoutes.post('/scenario/improve', authMiddleware(), async (c) => {
         storyboard_images,
         scenario_text,
         vision_model_id,
-        { openaiKey, googleKey, anthropicKey }
+        { openaiKey: openaiKey || undefined, googleKey: googleKey || undefined, anthropicKey: anthropicKey || undefined }
       );
       
       if (visionAnalysis) {
@@ -638,7 +646,14 @@ scenarioRoutes.post('/scenario/generate-plan', authMiddleware(), async (c) => {
       }, 400);
     }
 
-    const openaiKey = c.env.OPENAI_API_KEY;
+    // Get OpenAI API key using centralized manager
+    const openaiKey = await getApiKey(c.env, 'openai');
+    if (!openaiKey) {
+      return c.json({
+        success: false,
+        error: { code: 'CONFIG_ERROR', message: 'AI service not configured. Please set your OpenAI API key in Admin > API Keys.' },
+      }, 500);
+    }
     
     // Build enhanced options with inline tag instructions
     const enhancedOptions = {
@@ -778,7 +793,15 @@ scenarioRoutes.post('/scenario/full-pipeline', authMiddleware(), async (c) => {
       }, 400);
     }
 
-    const openaiKey = c.env.OPENAI_API_KEY;
+    // Get OpenAI API key using centralized manager
+    const openaiKey = await getApiKey(c.env, 'openai');
+    if (!openaiKey) {
+      return c.json({
+        success: false,
+        error: { code: 'CONFIG_ERROR', message: 'AI service not configured. Please set your OpenAI API key in Admin > API Keys.' },
+      }, 500);
+    }
+    
     const allWarnings: string[] = [];
     let scenarioToUse = scenario_text;
 
