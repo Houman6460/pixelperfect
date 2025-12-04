@@ -1481,3 +1481,286 @@ adminRoutes.put('/settings/:key', async (c) => {
     return c.json({ success: false, error: 'Failed to update setting' }, 500);
   }
 });
+
+// ==================== BACKEND VERIFICATION ====================
+
+import { initializeKVCache, VIDEO_MODELS, UPSCALER_MODELS, PLATFORM_PROFILES } from '../services/kvCacheInit';
+
+// GET /admin/verify-backend - Deep verification of D1, R2, KV
+adminRoutes.get('/verify-backend', async (c) => {
+  const results = {
+    d1: { status: 'checking', tables: [] as any[], issues: [] as string[] },
+    r2: { status: 'checking', paths: [] as any[], issues: [] as string[] },
+    kv: { status: 'checking', keys: [] as any[], issues: [] as string[] },
+    connections: { status: 'checking', issues: [] as string[] },
+    overall: 'PENDING',
+  };
+
+  try {
+    // ==================== D1 VERIFICATION ====================
+    const requiredTables = [
+      'users', 'scenarios', 'scene_breakdowns', 'timelines', 'segments',
+      'generation_plans', 'audio_tracks', 'covers', 'publish_jobs',
+      'published_items', 'enhancement_jobs', 'upscaler_models',
+      'platform_video_profiles', 'video_projects', 'project_folders'
+    ];
+
+    for (const table of requiredTables) {
+      try {
+        const result = await c.env.DB.prepare(`SELECT COUNT(*) as count FROM ${table}`).first();
+        results.d1.tables.push({ name: table, exists: true, count: result?.count || 0 });
+      } catch {
+        results.d1.tables.push({ name: table, exists: false });
+        results.d1.issues.push(`Table '${table}' missing or inaccessible`);
+      }
+    }
+
+    // Check critical columns in segments
+    try {
+      const segmentCols = await c.env.DB.prepare(`PRAGMA table_info(segments)`).all();
+      const colNames = segmentCols.results?.map((r: any) => r.name) || [];
+      const requiredSegmentCols = ['negative_prompt', 'style_preset', 'enhance_enabled', 'inline_tags_json'];
+      for (const col of requiredSegmentCols) {
+        if (!colNames.includes(col)) {
+          results.d1.issues.push(`Column 'segments.${col}' missing - run migration 011`);
+        }
+      }
+    } catch (e) {
+      results.d1.issues.push('Could not verify segment columns');
+    }
+
+    // Check scenarios table for tags_json
+    try {
+      const scenarioCols = await c.env.DB.prepare(`PRAGMA table_info(scenarios)`).all();
+      const colNames = scenarioCols.results?.map((r: any) => r.name) || [];
+      if (!colNames.includes('tags_json')) {
+        results.d1.issues.push(`Column 'scenarios.tags_json' missing - run migration 011`);
+      }
+    } catch (e) {
+      results.d1.issues.push('Could not verify scenario columns');
+    }
+
+    results.d1.status = results.d1.issues.length === 0 ? 'PASS' : 'FAIL';
+
+    // ==================== R2 VERIFICATION ====================
+    const testPaths = [
+      { prefix: 'videos/', type: 'Videos' },
+      { prefix: 'frames/', type: 'Frames' },
+      { prefix: 'audio/', type: 'Audio' },
+      { prefix: 'covers/', type: 'Covers' },
+      { prefix: 'thumbnails/', type: 'Thumbnails' },
+      { prefix: 'storyboard/', type: 'Storyboards' },
+    ];
+
+    for (const path of testPaths) {
+      try {
+        const list = await c.env.MEDIA_BUCKET.list({ prefix: path.prefix, limit: 1 });
+        results.r2.paths.push({ 
+          prefix: path.prefix, 
+          type: path.type, 
+          accessible: true, 
+          hasObjects: list.objects.length > 0 
+        });
+      } catch (e) {
+        results.r2.paths.push({ prefix: path.prefix, type: path.type, accessible: false });
+        results.r2.issues.push(`R2 path '${path.prefix}' not accessible`);
+      }
+    }
+
+    results.r2.status = results.r2.issues.length === 0 ? 'PASS' : 'FAIL';
+
+    // ==================== KV VERIFICATION ====================
+    const kvKeys = [
+      'video_models:list',
+      'video_models:recommended',
+      'upscalers:list',
+      'platforms:list',
+    ];
+
+    for (const key of kvKeys) {
+      try {
+        const value = await c.env.CACHE.get(key);
+        results.kv.keys.push({ key, exists: value !== null, size: value?.length || 0 });
+        if (!value) {
+          results.kv.issues.push(`KV key '${key}' not initialized`);
+        }
+      } catch (e) {
+        results.kv.keys.push({ key, exists: false, error: true });
+        results.kv.issues.push(`KV key '${key}' error`);
+      }
+    }
+
+    results.kv.status = results.kv.issues.length === 0 ? 'PASS' : 'NEEDS_INIT';
+
+    // ==================== CONNECTION VERIFICATION ====================
+    // Verify Scenario → Timeline connection
+    try {
+      const orphanedTimelines = await c.env.DB.prepare(`
+        SELECT COUNT(*) as count FROM timelines 
+        WHERE scenario_id IS NOT NULL 
+        AND scenario_id NOT IN (SELECT id FROM scenarios)
+      `).first();
+      if (orphanedTimelines && (orphanedTimelines as any).count > 0) {
+        results.connections.issues.push(`${(orphanedTimelines as any).count} timelines with broken scenario references`);
+      }
+    } catch (e) {
+      results.connections.issues.push('Could not verify timeline-scenario connections');
+    }
+
+    // Verify Segment → Timeline connection
+    try {
+      const orphanedSegments = await c.env.DB.prepare(`
+        SELECT COUNT(*) as count FROM segments 
+        WHERE timeline_id NOT IN (SELECT id FROM timelines)
+      `).first();
+      if (orphanedSegments && (orphanedSegments as any).count > 0) {
+        results.connections.issues.push(`${(orphanedSegments as any).count} orphaned segments`);
+      }
+    } catch (e) {
+      // Segments table might not exist yet
+    }
+
+    results.connections.status = results.connections.issues.length === 0 ? 'PASS' : 'WARN';
+
+    // ==================== OVERALL STATUS ====================
+    const allPass = results.d1.status === 'PASS' && 
+                   results.r2.status === 'PASS' && 
+                   (results.kv.status === 'PASS' || results.kv.status === 'NEEDS_INIT');
+    results.overall = allPass ? 'PASS' : 'FAIL';
+
+    return c.json({
+      success: true,
+      verification: results,
+      summary: {
+        d1: `${results.d1.tables.filter(t => t.exists).length}/${requiredTables.length} tables OK`,
+        r2: `${results.r2.paths.filter(p => p.accessible).length}/${testPaths.length} paths OK`,
+        kv: `${results.kv.keys.filter(k => k.exists).length}/${kvKeys.length} keys OK`,
+        connections: results.connections.status,
+      },
+      recommendations: [
+        ...(results.d1.issues.length > 0 ? ['Run migration 011_scenario_timeline_completion.sql'] : []),
+        ...(results.kv.status === 'NEEDS_INIT' ? ['Call POST /admin/init-kv-cache to initialize KV'] : []),
+      ],
+    });
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: error.message,
+      verification: results,
+    }, 500);
+  }
+});
+
+// POST /admin/init-kv-cache - Initialize all KV caches
+adminRoutes.post('/init-kv-cache', async (c) => {
+  try {
+    const result = await initializeKVCache(c.env.CACHE);
+    
+    return c.json({
+      success: result.success,
+      data: {
+        initialized: result.initialized,
+        errors: result.errors,
+        counts: {
+          video_models: VIDEO_MODELS.length,
+          upscalers: UPSCALER_MODELS.length,
+          platforms: PLATFORM_PROFILES.length,
+        },
+      },
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// POST /admin/run-migration - Run a specific migration
+adminRoutes.post('/run-migration/:name', async (c) => {
+  try {
+    const migrationName = c.req.param('name');
+    
+    // Security: Only allow known migrations
+    const allowedMigrations = [
+      '011_scenario_timeline_completion',
+    ];
+    
+    if (!allowedMigrations.includes(migrationName)) {
+      return c.json({ success: false, error: 'Migration not allowed' }, 400);
+    }
+    
+    // Read and execute migration (in production, this would read from file)
+    // For now, return instructions
+    return c.json({
+      success: true,
+      message: `Migration ${migrationName} is ready`,
+      instructions: [
+        `Run: wrangler d1 execute pixelperfect-db --file=./src/db/migrations/${migrationName}.sql`,
+        'Or execute via Cloudflare Dashboard > D1 > Console',
+      ],
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// GET /admin/data-flow-map - Get visual map of data flow
+adminRoutes.get('/data-flow-map', async (c) => {
+  return c.json({
+    success: true,
+    data: {
+      scenario_mode: {
+        input: ['scenario_text', 'target_model_id', 'target_duration', 'storyboard_images', 'inline_tags'],
+        d1_writes: ['scenarios', 'scene_breakdowns', 'storyboard_images'],
+        r2_writes: ['storyboard/{userId}/{scenarioId}/*.png'],
+        kv_reads: ['video_models:list', 'video_models:recommended'],
+        output: ['improved_scenario', 'tags_json', 'breakdown'],
+      },
+      generate_plan: {
+        input: ['scenario_id', 'inline_tags', 'target_model_id', 'options'],
+        d1_writes: ['timelines', 'segments', 'generation_plans'],
+        d1_reads: ['scenarios', 'scene_breakdowns'],
+        kv_reads: ['video_models:list'],
+        output: ['timeline', 'segments[]', 'generation_plan'],
+      },
+      segment_generation: {
+        input: ['segment_id', 'prompt', 'model_id', 'first_frame'],
+        d1_updates: ['segments.status', 'segments.video_url', 'segments.last_frame_url'],
+        r2_writes: [
+          'videos/raw/{userId}/{timelineId}/{segmentId}.mp4',
+          'frames/{userId}/{timelineId}/{segmentId}/last.png',
+          'thumbnails/{userId}/{timelineId}/{segmentId}.jpg',
+        ],
+        kv_reads: ['video_models:{modelId}'],
+      },
+      enhancement: {
+        input: ['segment_id', 'enhance_model'],
+        d1_updates: ['segments.enhance_status', 'segments.enhanced_video_url', 'enhancement_jobs'],
+        r2_writes: ['videos/enhanced/{userId}/{timelineId}/{segmentId}.mp4'],
+        kv_reads: ['upscalers:list'],
+      },
+      audio_track: {
+        input: ['timeline_id', 'audio_file', 'settings'],
+        d1_writes: ['audio_tracks'],
+        r2_writes: [
+          'audio/{userId}/{timelineId}/original.{format}',
+          'audio/{userId}/{timelineId}/processed.mp3',
+        ],
+      },
+      cover_generation: {
+        input: ['timeline_id', 'platform', 'style'],
+        d1_writes: ['covers'],
+        r2_writes: ['covers/{userId}/{timelineId}/{platform}.png'],
+        kv_reads: ['platform:{platformId}'],
+      },
+      publishing: {
+        input: ['project_id', 'platform', 'video_url', 'metadata'],
+        d1_writes: ['publish_jobs', 'published_items'],
+        d1_reads: ['timelines', 'covers', 'audio_tracks'],
+        kv_reads: ['platform:{platformId}'],
+      },
+      gallery: {
+        d1_reads: ['video_projects', 'timelines', 'published_items', 'covers'],
+        r2_reads: ['thumbnails/*', 'covers/*', 'videos/final/*'],
+      },
+    },
+  });
+});
