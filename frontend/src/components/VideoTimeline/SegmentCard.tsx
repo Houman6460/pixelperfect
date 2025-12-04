@@ -2,9 +2,39 @@ import React, { useState } from 'react';
 import {
   Play, Pause, Trash2, Copy, GripVertical, ChevronDown, ChevronUp,
   AlertTriangle, Check, Clock, Loader2, Image, Video, Wand2,
-  Camera, Zap, Settings2, Eye, RefreshCw, Download, Sparkles,
+  Camera, Zap, Settings2, Eye, RefreshCw, Download, Sparkles, ImagePlus,
 } from 'lucide-react';
 import axios from 'axios';
+
+// Dynamic API base URL
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('pages.dev')) {
+    return 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev';
+  }
+  return 'http://localhost:4000';
+};
+const API_BASE = getApiBaseUrl();
+
+// Get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// Style presets for AI frame generation
+const FRAME_STYLES = [
+  { id: 'cinematic', name: 'Cinematic', icon: '🎬' },
+  { id: 'anime', name: 'Anime', icon: '🎨' },
+  { id: 'realistic', name: 'Realistic', icon: '📷' },
+  { id: 'artistic', name: 'Artistic', icon: '🖼️' },
+  { id: 'nono-banna', name: 'Nono Banna', icon: '✨' },
+  { id: '3d-render', name: '3D Render', icon: '🎮' },
+  { id: 'vintage', name: 'Vintage', icon: '📼' },
+  { id: 'fantasy', name: 'Fantasy', icon: '🔮' },
+];
 import {
   TimelineSegment,
   MODEL_CAPABILITY_REGISTRY,
@@ -84,12 +114,45 @@ export default function SegmentCard({
   const [isImproving, setIsImproving] = useState(false);
   const [enhanceEnabled, setEnhanceEnabled] = useState(false);
   const [enhanceModel, setEnhanceModel] = useState<string | undefined>();
+  const [isGeneratingFrame, setIsGeneratingFrame] = useState(false);
+  const [frameStyle, setFrameStyle] = useState('cinematic');
+  const [showStyleMenu, setShowStyleMenu] = useState(false);
+  const [frameError, setFrameError] = useState<string | null>(null);
   
   const model = MODEL_CAPABILITY_REGISTRY[segment.model];
   const statusStyle = STATUS_STYLES[segment.status];
   const StatusIcon = statusStyle.icon;
 
-  const API_BASE = import.meta.env.VITE_API_URL || 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev';
+  // Generate first frame with AI
+  const handleGenerateFirstFrame = async () => {
+    if (!segment.prompt || isGeneratingFrame) return;
+    
+    setIsGeneratingFrame(true);
+    setFrameError(null);
+    
+    try {
+      const response = await axios.post(
+        `${API_BASE}/api/generate/first-frame`,
+        {
+          prompt: segment.prompt,
+          style: frameStyle,
+          aspect_ratio: '16:9',
+          segment_id: segment.segment_id,
+        },
+        { headers: getAuthHeaders() }
+      );
+      
+      if (response.data.success) {
+        onSetFirstFrame(response.data.data.image_url);
+      } else {
+        setFrameError(response.data.error || 'Failed to generate frame');
+      }
+    } catch (error: any) {
+      setFrameError(error.response?.data?.error || 'Failed to generate frame');
+    } finally {
+      setIsGeneratingFrame(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -272,25 +335,84 @@ export default function SegmentCard({
             <label className="block text-xs font-medium text-slate-400 mb-1.5">
               First Frame {!isFirst && '(auto-linked from previous segment)'}
             </label>
-            <div className="flex items-center gap-3">
-              <div className="w-24 h-14 rounded-lg border border-slate-700 overflow-hidden bg-slate-900/50 flex items-center justify-center">
+            <div className="flex items-center gap-2">
+              {/* Frame Preview */}
+              <div className="w-24 h-14 rounded-lg border border-slate-700 overflow-hidden bg-slate-900/50 flex items-center justify-center relative">
+                {isGeneratingFrame && (
+                  <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
+                  </div>
+                )}
                 {segment.first_frame ? (
                   <img src={segment.first_frame} alt="First frame" className="w-full h-full object-cover" />
                 ) : (
                   <Image className="w-5 h-5 text-slate-600" />
                 )}
               </div>
+              
               {isFirst && (
                 <>
-                  <label className="flex-1 px-3 py-2 border border-dashed border-slate-600 rounded-lg text-center cursor-pointer hover:bg-slate-700/30 transition">
+                  {/* AI Generate Button with Style Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={handleGenerateFirstFrame}
+                      disabled={isGeneratingFrame || !segment.prompt}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs text-white transition"
+                      title={!segment.prompt ? 'Add a prompt first' : 'Generate frame with AI'}
+                    >
+                      {isGeneratingFrame ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5" />
+                      )}
+                      <span>AI Generate</span>
+                    </button>
+                  </div>
+                  
+                  {/* Style Selector */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowStyleMenu(!showStyleMenu)}
+                      className="flex items-center gap-1 px-2 py-2 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-xs text-slate-300 transition"
+                      title="Select style"
+                    >
+                      <span>{FRAME_STYLES.find(s => s.id === frameStyle)?.icon}</span>
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                    
+                    {showStyleMenu && (
+                      <div className="absolute top-full mt-1 left-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 min-w-[140px]">
+                        {FRAME_STYLES.map((style) => (
+                          <button
+                            key={style.id}
+                            onClick={() => {
+                              setFrameStyle(style.id);
+                              setShowStyleMenu(false);
+                            }}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-slate-700/50 transition ${
+                              frameStyle === style.id ? 'text-purple-400 bg-purple-500/10' : 'text-slate-300'
+                            }`}
+                          >
+                            <span>{style.icon}</span>
+                            <span>{style.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Upload Button */}
+                  <label className="px-3 py-2 border border-dashed border-slate-600 rounded-lg text-center cursor-pointer hover:bg-slate-700/30 transition">
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleFileUpload}
                       className="hidden"
                     />
-                    <span className="text-xs text-slate-400">Upload start frame</span>
+                    <span className="text-xs text-slate-400">Upload</span>
                   </label>
+                  
+                  {/* Remove Button */}
                   {segment.first_frame && (
                     <button
                       onClick={() => onSetFirstFrame(null)}
@@ -304,6 +426,11 @@ export default function SegmentCard({
                 </>
               )}
             </div>
+            
+            {/* Error Message */}
+            {frameError && (
+              <p className="text-xs text-red-400 mt-1">{frameError}</p>
+            )}
           </div>
 
           {/* Motion & Transition Row */}

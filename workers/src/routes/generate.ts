@@ -142,6 +142,12 @@ generateRoutes.post('/image', authMiddleware(), async (c) => {
       return c.json({ success: false, error: 'Insufficient tokens' }, 402);
     }
     
+    // Get OpenAI API key
+    const openaiKey = await getApiKey(c.env, 'openai');
+    if (!openaiKey) {
+      return c.json({ success: false, error: 'OpenAI API not configured' }, 500);
+    }
+    
     // Create job record
     const jobId = `job_${nanoid(16)}`;
     await c.env.DB.prepare(`
@@ -241,6 +247,12 @@ generateRoutes.post('/text', authMiddleware(), async (c) => {
     const tokenCost = await getTokenCost(c.env.DB, 'text_generation');
     if (user.tokens < tokenCost) {
       return c.json({ success: false, error: 'Insufficient tokens' }, 402);
+    }
+    
+    // Get OpenAI API key
+    const openaiKey = await getApiKey(c.env, 'openai');
+    if (!openaiKey) {
+      return c.json({ success: false, error: 'OpenAI API not configured' }, 500);
     }
     
     // Create job
@@ -414,3 +426,207 @@ async function getTokenPricing(db: D1Database, operation: string): Promise<{ tok
     providerCost: pricing?.base_provider_cost || 0,
   };
 }
+
+// ============== FIRST FRAME GENERATION ==============
+
+// Style presets for first frame generation
+const FRAME_STYLE_PRESETS: Record<string, { model: string; suffix: string; aspect?: string }> = {
+  'cinematic': { 
+    model: 'black-forest-labs/flux-1.1-pro',
+    suffix: ', cinematic film still, professional cinematography, dramatic lighting, 8k, highly detailed'
+  },
+  'anime': { 
+    model: 'black-forest-labs/flux-1.1-pro',
+    suffix: ', anime style, studio ghibli inspired, vibrant colors, detailed anime artwork'
+  },
+  'realistic': { 
+    model: 'black-forest-labs/flux-1.1-pro',
+    suffix: ', photorealistic, ultra detailed, professional photography, 8k resolution'
+  },
+  'artistic': { 
+    model: 'black-forest-labs/flux-1.1-pro',
+    suffix: ', digital art, concept art, painterly style, trending on artstation'
+  },
+  'nono-banna': { 
+    model: 'nono-ai/flux-1.1-nono-banna',
+    suffix: ', high quality, detailed'
+  },
+  '3d-render': { 
+    model: 'black-forest-labs/flux-1.1-pro',
+    suffix: ', 3D render, octane render, unreal engine 5, photorealistic 3D, volumetric lighting'
+  },
+  'vintage': { 
+    model: 'black-forest-labs/flux-1.1-pro',
+    suffix: ', vintage film grain, retro aesthetic, nostalgic, 35mm film photography'
+  },
+  'fantasy': { 
+    model: 'black-forest-labs/flux-1.1-pro',
+    suffix: ', fantasy art, magical atmosphere, ethereal lighting, concept art style'
+  },
+};
+
+// POST /generate/first-frame - Generate first frame for timeline segment
+generateRoutes.post('/first-frame', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user') as User;
+    const body = await c.req.json();
+    const { 
+      prompt, 
+      style = 'cinematic',
+      aspect_ratio = '16:9',
+      segment_id,
+    } = body;
+
+    if (!prompt) {
+      return c.json({ success: false, error: 'Prompt is required' }, 400);
+    }
+
+    // Check token balance
+    const tokenCost = await getTokenCost(c.env.DB, 'first_frame_generation');
+    if (user.tokens < tokenCost) {
+      return c.json({ 
+        success: false, 
+        error: 'Insufficient tokens', 
+        tokensRequired: tokenCost, 
+        tokensAvailable: user.tokens 
+      }, 402);
+    }
+
+    // Get Replicate API key
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
+      return c.json({ 
+        success: false, 
+        error: 'Replicate API not configured. Please add your Replicate API key in Admin > API Keys.' 
+      }, 500);
+    }
+
+    // Get style preset
+    const stylePreset = FRAME_STYLE_PRESETS[style] || FRAME_STYLE_PRESETS['cinematic'];
+    const enhancedPrompt = prompt + stylePreset.suffix;
+
+    // Map aspect ratio to dimensions
+    const aspectDimensions: Record<string, { width: number; height: number }> = {
+      '16:9': { width: 1280, height: 720 },
+      '9:16': { width: 720, height: 1280 },
+      '1:1': { width: 1024, height: 1024 },
+      '4:3': { width: 1024, height: 768 },
+      '3:4': { width: 768, height: 1024 },
+      '21:9': { width: 1344, height: 576 },
+    };
+    const dimensions = aspectDimensions[aspect_ratio] || aspectDimensions['16:9'];
+
+    // Create prediction on Replicate
+    const response = await fetch('https://api.replicate.com/v1/predictions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${replicateKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: stylePreset.model,
+        input: {
+          prompt: enhancedPrompt,
+          width: dimensions.width,
+          height: dimensions.height,
+          num_outputs: 1,
+          output_format: 'webp',
+          output_quality: 90,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Replicate API error:', errorText);
+      return c.json({ 
+        success: false, 
+        error: 'Failed to generate image. Please try again.' 
+      }, 500);
+    }
+
+    const prediction = await response.json() as any;
+
+    // Poll for completion (max 60 seconds)
+    let result = prediction;
+    const maxAttempts = 30;
+    let attempts = 0;
+
+    while (result.status !== 'succeeded' && result.status !== 'failed' && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const statusResponse = await fetch(result.urls.get, {
+        headers: { 'Authorization': `Bearer ${replicateKey}` },
+      });
+      result = await statusResponse.json() as any;
+      attempts++;
+    }
+
+    if (result.status === 'failed') {
+      console.error('Replicate prediction failed:', result.error);
+      return c.json({ 
+        success: false, 
+        error: result.error || 'Image generation failed' 
+      }, 500);
+    }
+
+    if (result.status !== 'succeeded') {
+      return c.json({ 
+        success: false, 
+        error: 'Image generation timed out. Please try again.' 
+      }, 500);
+    }
+
+    // Get the generated image URL
+    const imageUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+
+    // Deduct tokens
+    await c.env.DB.prepare(
+      'UPDATE users SET tokens = tokens - ? WHERE id = ?'
+    ).bind(tokenCost, user.id).run();
+
+    // Log the generation
+    await c.env.DB.prepare(`
+      INSERT INTO generation_jobs (id, user_id, type, status, input_data, output_data, provider, model, created_at, completed_at)
+      VALUES (?, ?, 'first_frame', 'completed', ?, ?, 'replicate', ?, datetime('now'), datetime('now'))
+    `).bind(
+      `job_${nanoid(16)}`,
+      user.id,
+      JSON.stringify({ prompt, style, aspect_ratio, segment_id }),
+      JSON.stringify({ image_url: imageUrl }),
+      stylePreset.model
+    ).run();
+
+    return c.json({
+      success: true,
+      data: {
+        image_url: imageUrl,
+        style,
+        aspect_ratio,
+        model: stylePreset.model,
+        tokens_used: tokenCost,
+      },
+    });
+
+  } catch (error: any) {
+    console.error('First frame generation error:', error);
+    return c.json({ 
+      success: false, 
+      error: error.message || 'Failed to generate first frame' 
+    }, 500);
+  }
+});
+
+// GET /generate/first-frame/styles - Get available style presets
+generateRoutes.get('/first-frame/styles', async (c) => {
+  const styles = Object.entries(FRAME_STYLE_PRESETS).map(([id, preset]) => ({
+    id,
+    name: id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+    model: preset.model,
+  }));
+
+  return c.json({
+    success: true,
+    data: styles,
+  });
+});
