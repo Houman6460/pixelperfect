@@ -58,6 +58,179 @@ scenarioRoutes.get('/scenario/models', async (c) => {
 
 // ==================== AUTHENTICATED ENDPOINTS ====================
 
+// POST /scenario/from-prompt - Generate full scenario from a simple concept prompt
+scenarioRoutes.post('/scenario/from-prompt', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const {
+      concept_prompt,
+      target_model_id,
+      target_duration_sec,
+      style_hints,
+      genre,
+      mood,
+      ai_model_id = 'gpt-4o',
+    } = body;
+
+    if (!concept_prompt || concept_prompt.trim().length < 10) {
+      return c.json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'Please provide a concept prompt with at least 10 characters' },
+      }, 400);
+    }
+
+    const openaiKey = c.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      return c.json({
+        success: false,
+        error: { code: 'CONFIG_ERROR', message: 'AI service not configured' },
+      }, 500);
+    }
+
+    // Get model capabilities from the selected target model
+    const models = getAllModels();
+    const targetModel = models.find(m => m.modelId === target_model_id) || models[0];
+    const maxSegmentDuration = targetModel?.maxDurationSec || 10;
+    const targetDuration = target_duration_sec || 60;
+    const estimatedSegments = Math.ceil(targetDuration / maxSegmentDuration);
+
+    // Build prompt for scenario generation
+    const systemPrompt = `You are a professional screenwriter and cinematic director. 
+Your task is to transform a simple concept into a full cinematic scenario with rich visual details.
+
+OUTPUT FORMAT:
+- Write a detailed narrative scenario divided into clear scenes
+- Use inline tags for cinematic directions: [camera: ...], [lighting: ...], [mood: ...], [fx: ...], [sfx: ...], [transition: ...]
+- Each scene should be suitable for a ${maxSegmentDuration}-second video segment
+- Total scenario should be paced for approximately ${targetDuration} seconds (${estimatedSegments} segments)
+- Include character descriptions, environment details, and emotional beats
+- Make every scene visually compelling and technically achievable with AI video generation
+
+STYLE GUIDANCE:
+${genre ? `- Genre: ${genre}` : '- Genre: Cinematic'}
+${mood ? `- Mood: ${mood}` : '- Mood: Compelling'}
+${style_hints ? `- Style notes: ${JSON.stringify(style_hints)}` : ''}
+
+INLINE TAG EXAMPLES:
+[camera: wide establishing shot] [lighting: golden hour] [mood: mysterious]
+[camera: close-up on face] [fx: lens flare] [sfx: dramatic music swell]
+[transition: slow fade] [camera: tracking shot] [lighting: neon-lit]`;
+
+    const userPrompt = `Transform this concept into a full cinematic scenario:
+
+"${concept_prompt}"
+
+Create a compelling, visually rich story with ${estimatedSegments} distinct scenes, each suitable for a ${maxSegmentDuration}-second AI-generated video clip. Include inline tags for camera, lighting, mood, and effects.`;
+
+    // Call OpenAI to generate the scenario
+    const startTime = Date.now();
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiKey}`,
+      },
+      body: JSON.stringify({
+        model: ai_model_id.startsWith('gpt-') ? ai_model_id : 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.8,
+        max_tokens: 4000,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error:', errorText);
+      return c.json({
+        success: false,
+        error: { code: 'AI_ERROR', message: 'Failed to generate scenario from prompt' },
+      }, 500);
+    }
+
+    const data: any = await response.json();
+    const rawScenario = data.choices?.[0]?.message?.content;
+    const generationTimeMs = Date.now() - startTime;
+
+    if (!rawScenario) {
+      return c.json({
+        success: false,
+        error: { code: 'AI_ERROR', message: 'No scenario generated' },
+      }, 500);
+    }
+
+    // Now improve the scenario using existing logic
+    const improveResult = await improveScenario(
+      {
+        scenario_text: rawScenario,
+        target_duration_sec: targetDuration,
+        target_model_id: target_model_id || 'kling-2.5-pro',
+        language: 'en',
+        style_hints: style_hints || { genre: genre || 'cinematic', mood: mood || 'compelling' },
+      },
+      openaiKey
+    );
+
+    // Save to D1 if we have a database
+    let scenarioId: string | null = null;
+    try {
+      const repo = new ScenarioRepository(c.env.DB);
+      scenarioId = await repo.create({
+        userId: user.id,
+        title: concept_prompt.substring(0, 100),
+        originalText: rawScenario,
+        targetModelId: target_model_id,
+        targetDurationSec: targetDuration,
+        language: 'en',
+        styleHints: style_hints || { genre, mood },
+      });
+
+      // Update with improved text
+      await repo.updateImprovedText(scenarioId, improveResult.improved_scenario);
+
+      // Save concept prompt reference (update scenario with concept_prompt)
+      await c.env.DB.prepare(`
+        UPDATE scenarios SET 
+          concept_prompt = ?,
+          generation_source = 'from_prompt',
+          concept_prompt_model_id = ?,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(concept_prompt, ai_model_id, scenarioId).run();
+
+    } catch (dbError) {
+      console.error('Failed to save scenario to D1:', dbError);
+      // Continue without saving - we'll still return the generated scenario
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        scenario_id: scenarioId,
+        concept_prompt,
+        raw_scenario: rawScenario,
+        improved_scenario: improveResult.improved_scenario,
+        warnings: improveResult.warnings || [],
+        generation_stats: {
+          generation_time_ms: generationTimeMs,
+          ai_model: ai_model_id,
+          target_model: target_model_id,
+          estimated_segments: estimatedSegments,
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error('Generate scenario from prompt error:', error);
+    return c.json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: error.message || 'Failed to generate scenario' },
+    }, 500);
+  }
+});
+
 // POST /scenario/parse - Parse scenario into breakdown (for preview)
 scenarioRoutes.post('/scenario/parse', authMiddleware(), async (c) => {
   try {

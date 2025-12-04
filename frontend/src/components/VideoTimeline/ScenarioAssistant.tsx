@@ -140,6 +140,11 @@ export function ScenarioAssistant({
   
   // Scenario tags (parsed from inline markup)
   const [scenarioTags, setScenarioTags] = useState<ParsedTag[]>([]);
+  
+  // Concept Prompt (optional - for generating scenario from simple idea)
+  const [conceptPrompt, setConceptPrompt] = useState('');
+  const [isGeneratingFromPrompt, setIsGeneratingFromPrompt] = useState(false);
+  const [showConceptPrompt, setShowConceptPrompt] = useState(true);
 
   // Get auth token
   const getAuthHeaders = () => {
@@ -202,6 +207,50 @@ export function ScenarioAssistant({
     );
   };
   
+  // Generate scenario from concept prompt
+  const handleGenerateFromPrompt = async () => {
+    if (!conceptPrompt.trim() || conceptPrompt.length < 10) {
+      setError('Please enter at least 10 characters describing your concept');
+      return;
+    }
+    if (isGeneratingFromPrompt) return;
+
+    setIsGeneratingFromPrompt(true);
+    setError(null);
+    setWarnings([]);
+
+    try {
+      const response = await axios.post(
+        `${API_BASE}/api/v1/scenario/from-prompt`,
+        {
+          concept_prompt: conceptPrompt,
+          target_model_id: selectedModelId,
+          target_duration_sec: targetDuration,
+          genre: 'cinematic',
+          mood: 'compelling',
+        },
+        { headers: getAuthHeaders() }
+      );
+
+      if (response.data.success) {
+        const data = response.data.data;
+        // Fill the scenario textarea with the improved scenario
+        setScenario(data.improved_scenario || data.raw_scenario);
+        setImprovedScenario(data.improved_scenario);
+        setWarnings(data.warnings || []);
+        setImprovementSuccess(true);
+        setTimeout(() => setImprovementSuccess(false), 3000);
+        
+        // Collapse the concept prompt section after successful generation
+        setShowConceptPrompt(false);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || 'Failed to generate scenario from prompt');
+    } finally {
+      setIsGeneratingFromPrompt(false);
+    }
+  };
+
   // Convert images to base64 for API
   const imagesToBase64 = async (): Promise<{ data: string; caption?: string }[]> => {
     const results: { data: string; caption?: string }[] = [];
@@ -346,6 +395,80 @@ export function ScenarioAssistant({
           <h2 className="text-lg font-semibold text-white">Scenario Assistant</h2>
           <p className="text-xs text-slate-400">Write your story, let AI handle the rest</p>
         </div>
+      </div>
+
+      {/* Concept Prompt Section - Optional */}
+      <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-xl border border-indigo-500/30">
+        <button
+          onClick={() => setShowConceptPrompt(!showConceptPrompt)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+            <span className="text-sm font-medium text-slate-200">Concept Prompt</span>
+            <span className="text-xs text-indigo-400/70">(optional)</span>
+          </div>
+          {showConceptPrompt ? (
+            <ChevronUp className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          )}
+        </button>
+        
+        {showConceptPrompt && (
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-slate-400">
+              Shortly describe what you want. AI will turn this into a full cinematic scenario with scenes, camera directions, and visual details.
+            </p>
+            
+            <textarea
+              value={conceptPrompt}
+              onChange={(e) => setConceptPrompt(e.target.value)}
+              placeholder="A lonely astronaut on Mars discovering an ancient alien ruin beneath the red sand..."
+              className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 resize-none"
+              rows={3}
+            />
+            
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleGenerateFromPrompt}
+                disabled={isGeneratingFromPrompt || !conceptPrompt.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg text-sm font-medium hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {isGeneratingFromPrompt ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-4 h-4" />
+                    Generate Scenario from Prompt
+                  </>
+                )}
+              </button>
+              
+              {conceptPrompt && (
+                <span className="text-xs text-slate-500">
+                  {conceptPrompt.length} characters
+                </span>
+              )}
+            </div>
+            
+            {conceptPrompt && !scenario && (
+              <div className="flex items-center gap-2 text-xs text-indigo-400/70">
+                <Sparkles className="w-3 h-3" />
+                Click "Generate Scenario from Prompt" to create a full cinematic story
+              </div>
+            )}
+          </div>
+        )}
+        
+        {!showConceptPrompt && conceptPrompt && (
+          <div className="mt-2 text-xs text-slate-500 truncate">
+            Original prompt: "{conceptPrompt.substring(0, 60)}..."
+          </div>
+        )}
       </div>
 
       {/* Scenario Input with Inline Tag Editor */}
