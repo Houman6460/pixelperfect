@@ -234,18 +234,29 @@ Create a compelling, visually rich story with ${estimatedSegments} distinct scen
     }
 
     // Now improve the scenario using existing logic
-    const improveResult = await improveScenario(
-      {
-        scenario_text: rawScenario,
-        target_duration_sec: targetDuration,
-        target_model_id: target_model_id || 'kling-2.5-pro',
-        language: 'en',
-        style_hints: style_hints || { genre: genre || 'cinematic', mood: mood || 'compelling' },
-      },
-      openaiKey
-    );
+    let improveResult: { improved_scenario: string; warnings: string[] } = {
+      improved_scenario: rawScenario,
+      warnings: [],
+    };
+    
+    try {
+      improveResult = await improveScenario(
+        {
+          scenario_text: rawScenario,
+          target_duration_sec: targetDuration,
+          target_model_id: target_model_id || 'kling-2.5-pro',
+          language: 'en',
+          style_hints: style_hints || { genre: genre || 'cinematic', mood: mood || 'compelling' },
+        },
+        openaiKey
+      );
+    } catch (improveError) {
+      console.error('Failed to improve scenario, using raw:', improveError);
+      // Use raw scenario if improvement fails
+      improveResult = { improved_scenario: rawScenario, warnings: ['Improvement step skipped'] };
+    }
 
-    // Save to D1 if we have a database
+    // Save to D1 if we have a database (optional - don't fail if DB ops fail)
     let scenarioId: string | null = null;
     try {
       const repo = new ScenarioRepository(c.env.DB);
@@ -262,15 +273,17 @@ Create a compelling, visually rich story with ${estimatedSegments} distinct scen
       // Update with improved text
       await repo.updateImprovedText(scenarioId, improveResult.improved_scenario);
 
-      // Save concept prompt reference (update scenario with concept_prompt)
-      await c.env.DB.prepare(`
-        UPDATE scenarios SET 
-          concept_prompt = ?,
-          generation_source = 'from_prompt',
-          concept_prompt_model_id = ?,
-          updated_at = datetime('now')
-        WHERE id = ?
-      `).bind(concept_prompt, ai_model_id, scenarioId).run();
+      // Try to save concept prompt reference (these columns may not exist yet)
+      try {
+        await c.env.DB.prepare(`
+          UPDATE scenarios SET 
+            concept_prompt = ?,
+            updated_at = datetime('now')
+          WHERE id = ?
+        `).bind(concept_prompt, scenarioId).run();
+      } catch (e) {
+        // Column may not exist - that's ok
+      }
 
     } catch (dbError) {
       console.error('Failed to save scenario to D1:', dbError);
