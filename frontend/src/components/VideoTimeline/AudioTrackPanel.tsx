@@ -182,6 +182,8 @@ export const AudioTrackPanel: React.FC<AudioTrackPanelProps> = ({
         accept="audio/*"
         onChange={handleUpload}
         className="hidden"
+        aria-label="Upload audio file"
+        title="Upload audio file"
       />
 
       {/* Hidden audio element */}
@@ -205,6 +207,8 @@ export const AudioTrackPanel: React.FC<AudioTrackPanelProps> = ({
                   value={track.volume * 100}
                   onChange={(e) => handleSettingChange({ volume: parseInt(e.target.value) / 100 })}
                   className="flex-1 accent-purple-500"
+                  aria-label="Music volume"
+                  title="Music volume"
                 />
                 <span className="text-xs text-slate-400 w-8">{Math.round(track.volume * 100)}%</span>
               </div>
@@ -226,6 +230,8 @@ export const AudioTrackPanel: React.FC<AudioTrackPanelProps> = ({
                   disabled={track.mute_video_audio}
                   onChange={(e) => handleSettingChange({ video_audio_volume: parseInt(e.target.value) / 100 })}
                   className="flex-1 accent-purple-500 disabled:opacity-50"
+                  aria-label="Video audio volume"
+                  title="Video audio volume"
                 />
                 <span className="text-xs text-slate-400 w-8">{Math.round(track.video_audio_volume * 100)}%</span>
               </div>
@@ -244,6 +250,8 @@ export const AudioTrackPanel: React.FC<AudioTrackPanelProps> = ({
                 value={track.fade_in_sec}
                 onChange={(e) => handleSettingChange({ fade_in_sec: parseFloat(e.target.value) })}
                 className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded-md text-sm"
+                aria-label="Fade in duration in seconds"
+                title="Fade in duration"
               />
             </div>
             <div>
@@ -256,6 +264,8 @@ export const AudioTrackPanel: React.FC<AudioTrackPanelProps> = ({
                 value={track.fade_out_sec}
                 onChange={(e) => handleSettingChange({ fade_out_sec: parseFloat(e.target.value) })}
                 className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded-md text-sm"
+                aria-label="Fade out duration in seconds"
+                title="Fade out duration"
               />
             </div>
           </div>
