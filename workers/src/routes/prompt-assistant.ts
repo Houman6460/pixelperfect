@@ -8,6 +8,7 @@ import { Env, User } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import { improveScenePrompt, compileFinalPrompt } from '../services/promptAssistant';
 import { getModelCapabilities, getAllModels } from '../services/modelRegistry';
+import { getApiKey } from '../services/apiKeyManager';
 
 type Variables = {
   user: User;
@@ -79,7 +80,7 @@ promptAssistantRoutes.post('/prompt-assistant/improve', authMiddleware(), async 
       }, 400);
     }
 
-    const openaiKey = c.env.OPENAI_API_KEY;
+    const openaiKey = await getApiKey(c.env, 'openai');
     const result = await improveScenePrompt(
       { model_id, scene_prompt, tone, language },
       openaiKey
@@ -111,7 +112,7 @@ promptAssistantRoutes.post('/prompt-assistant/compile', authMiddleware(), async 
       }, 400);
     }
 
-    const openaiKey = c.env.OPENAI_API_KEY;
+    const openaiKey = await getApiKey(c.env, 'openai');
     const result = await compileFinalPrompt(
       { model_id, scene_prompt, dialogue, language },
       openaiKey
@@ -142,7 +143,7 @@ promptAssistantRoutes.post('/prompt-assistant/ai-enhance', authMiddleware(), asy
       return c.json({ success: false, error: 'prompt and model_id are required' }, 400);
     }
 
-    const openaiKey = c.env.OPENAI_API_KEY;
+    const openaiKey = await getApiKey(c.env, 'openai');
     const result = await improveScenePrompt(
       { model_id, scene_prompt: prompt, tone: tone_preset },
       openaiKey
@@ -176,7 +177,7 @@ promptAssistantRoutes.post('/prompt-assistant/build', authMiddleware(), async (c
       return c.json({ success: false, error: 'scene_prompt and model_id are required' }, 400);
     }
 
-    const openaiKey = c.env.OPENAI_API_KEY;
+    const openaiKey = await getApiKey(c.env, 'openai');
     const result = await compileFinalPrompt(
       { model_id, scene_prompt, dialogue },
       openaiKey

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { Env, User } from '../types';
 import { authMiddleware } from '../middleware/auth';
+import { getApiKey } from '../services/apiKeyManager';
 
 type Variables = {
   user: User;
@@ -72,8 +73,9 @@ editRoutes.post('/inpaint', authMiddleware(), async (c) => {
       return c.json({ success: false, error: 'Insufficient tokens', tokensRequired: tokenCost }, 402);
     }
     
-    if (!c.env.REPLICATE_API_KEY) {
-      return c.json({ success: false, error: 'AI service not configured' }, 500);
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
+      return c.json({ success: false, error: 'AI service not configured. Please add Replicate API key in Admin > API Keys.' }, 500);
     }
     
     // Convert to base64
@@ -86,7 +88,7 @@ editRoutes.post('/inpaint', authMiddleware(), async (c) => {
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}`,
+        'Authorization': `Bearer ${replicateKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -112,7 +114,7 @@ editRoutes.post('/inpaint', authMiddleware(), async (c) => {
     for (let i = 0; i < 60; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       const statusResponse = await fetch(prediction.urls.get, {
-        headers: { 'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}` },
+        headers: { 'Authorization': `Bearer ${replicateKey}` },
       });
       result = await statusResponse.json() as { status: string; output?: string[] | string; error?: string };
       
@@ -166,7 +168,8 @@ editRoutes.post('/remove', authMiddleware(), async (c) => {
       return c.json({ success: false, error: 'Insufficient tokens', tokensRequired: tokenCost }, 402);
     }
     
-    if (!c.env.REPLICATE_API_KEY) {
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
       return c.json({ success: false, error: 'AI service not configured' }, 500);
     }
     
@@ -179,7 +182,7 @@ editRoutes.post('/remove', authMiddleware(), async (c) => {
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}`,
+        'Authorization': `Bearer ${replicateKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -199,7 +202,7 @@ editRoutes.post('/remove', authMiddleware(), async (c) => {
     for (let i = 0; i < 60; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       const statusResponse = await fetch(prediction.urls.get, {
-        headers: { 'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}` },
+        headers: { 'Authorization': `Bearer ${replicateKey}` },
       });
       result = await statusResponse.json() as { status: string; output?: string; error?: string };
       
@@ -248,7 +251,8 @@ editRoutes.post('/remove-background', authMiddleware(), async (c) => {
       return c.json({ success: false, error: 'Insufficient tokens', tokensRequired: tokenCost }, 402);
     }
     
-    if (!c.env.REPLICATE_API_KEY) {
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
       return c.json({ success: false, error: 'AI service not configured' }, 500);
     }
     
@@ -259,7 +263,7 @@ editRoutes.post('/remove-background', authMiddleware(), async (c) => {
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}`,
+        'Authorization': `Bearer ${replicateKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -279,7 +283,7 @@ editRoutes.post('/remove-background', authMiddleware(), async (c) => {
     for (let i = 0; i < 60; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       const statusResponse = await fetch(prediction.urls.get, {
-        headers: { 'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}` },
+        headers: { 'Authorization': `Bearer ${replicateKey}` },
       });
       result = await statusResponse.json() as { status: string; output?: string; error?: string };
       
@@ -338,7 +342,8 @@ editRoutes.post('/enhance-skin', authMiddleware(), async (c) => {
       return c.json({ success: false, error: 'Insufficient tokens', tokensRequired: tokenCost }, 402);
     }
     
-    if (!c.env.REPLICATE_API_KEY) {
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
       return c.json({ success: false, error: 'AI service not configured' }, 500);
     }
     
@@ -349,7 +354,7 @@ editRoutes.post('/enhance-skin', authMiddleware(), async (c) => {
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}`,
+        'Authorization': `Bearer ${replicateKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -375,7 +380,7 @@ editRoutes.post('/enhance-skin', authMiddleware(), async (c) => {
     for (let i = 0; i < 60; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       const statusResponse = await fetch(prediction.urls.get, {
-        headers: { 'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}` },
+        headers: { 'Authorization': `Bearer ${replicateKey}` },
       });
       result = await statusResponse.json() as { status: string; output?: string; error?: string };
       
@@ -425,7 +430,8 @@ editRoutes.post('/upscale', authMiddleware(), async (c) => {
       return c.json({ success: false, error: 'Insufficient tokens', tokensRequired: tokenCost }, 402);
     }
     
-    if (!c.env.REPLICATE_API_KEY) {
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
       return c.json({ success: false, error: 'AI service not configured' }, 500);
     }
     
@@ -436,7 +442,7 @@ editRoutes.post('/upscale', authMiddleware(), async (c) => {
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}`,
+        'Authorization': `Bearer ${replicateKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -460,7 +466,7 @@ editRoutes.post('/upscale', authMiddleware(), async (c) => {
     for (let i = 0; i < 60; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       const statusResponse = await fetch(prediction.urls.get, {
-        headers: { 'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}` },
+        headers: { 'Authorization': `Bearer ${replicateKey}` },
       });
       result = await statusResponse.json() as { status: string; output?: string; error?: string };
       
@@ -551,7 +557,8 @@ editRoutes.post('/pro-focus', authMiddleware(), async (c) => {
       return c.json({ success: false, error: 'Insufficient tokens', tokensRequired: tokenCost }, 402);
     }
     
-    if (!c.env.REPLICATE_API_KEY) {
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
       return c.json({ success: false, error: 'AI service not configured' }, 500);
     }
     
@@ -565,7 +572,7 @@ editRoutes.post('/pro-focus', authMiddleware(), async (c) => {
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}`,
+        'Authorization': `Bearer ${replicateKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -614,7 +621,8 @@ editRoutes.post('/pro-lighting', authMiddleware(), async (c) => {
       return c.json({ success: false, error: 'Insufficient tokens', tokensRequired: tokenCost }, 402);
     }
     
-    if (!c.env.REPLICATE_API_KEY) {
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
       return c.json({ success: false, error: 'AI service not configured' }, 500);
     }
     
@@ -670,7 +678,8 @@ editRoutes.post('/style-transfer', authMiddleware(), async (c) => {
       return c.json({ success: false, error: 'Insufficient tokens', tokensRequired: tokenCost }, 402);
     }
     
-    if (!c.env.REPLICATE_API_KEY) {
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
       return c.json({ success: false, error: 'AI service not configured' }, 500);
     }
     
@@ -695,7 +704,7 @@ editRoutes.post('/style-transfer', authMiddleware(), async (c) => {
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}`,
+        'Authorization': `Bearer ${replicateKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -720,7 +729,7 @@ editRoutes.post('/style-transfer', authMiddleware(), async (c) => {
     for (let i = 0; i < 60; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       const statusResponse = await fetch(prediction.urls.get, {
-        headers: { 'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}` },
+        headers: { 'Authorization': `Bearer ${replicateKey}` },
       });
       result = await statusResponse.json() as { status: string; output?: string[]; error?: string };
       

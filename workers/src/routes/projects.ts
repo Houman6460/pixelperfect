@@ -8,6 +8,7 @@ import { Env, User } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import { generateMetadata, generateChapters, generateThumbnailPrompt } from '../services/galleryService';
 import publishingService from '../services/publishingService';
+import { getApiKey } from '../services/apiKeyManager';
 const {
   createPublishJob,
   formatDescriptionWithHashtags,
@@ -172,7 +173,7 @@ projectRoutes.post('/projects/:id/generate-metadata', authMiddleware(), async (c
       return c.json({ success: false, error: 'Scenario is required' }, 400);
     }
 
-    const openaiKey = c.env.OPENAI_API_KEY;
+    const openaiKey = await getApiKey(c.env, 'openai');
     const metadata = await generateMetadata(
       { project_id: projectId, scenario, style, target_platforms },
       openaiKey

@@ -8,6 +8,7 @@ import { Env, User } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import coverService from '../services/coverService';
 import { PublishPlatform } from '../types/gallery';
+import { getApiKey } from '../services/apiKeyManager';
 
 type Variables = {
   user: User;
@@ -76,7 +77,7 @@ coverRoutes.post('/cover/generate', authMiddleware(), async (c) => {
     const scenarioInfo = coverService.extractScenarioInfo(scenario);
 
     // Generate covers
-    const replicateKey = c.env.REPLICATE_API_KEY;
+    const replicateKey = await getApiKey(c.env, 'replicate');
     const result = await coverService.generateCovers(
       {
         project_id,

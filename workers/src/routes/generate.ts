@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { Env, User } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import { calculateSmartCost, logActualProviderCost, calculateDirectApiCost } from '../utils/costCalculator';
+import { getApiKey } from '../services/apiKeyManager';
 
 type Variables = {
   user: User;
@@ -61,17 +62,18 @@ generateRoutes.post('/', authMiddleware(), async (c) => {
       VALUES (?, ?, 'image', 'processing', ?, 'openai', 'dall-e-3', datetime('now'))
     `).bind(jobId, user.id, JSON.stringify({ prompt, style, autoUpscale, upscaleFactor })).run();
     
-    // Check if OPENAI_API_KEY is configured
-    if (!c.env.OPENAI_API_KEY) {
+    // Get OpenAI API key from centralized manager
+    const openaiKey = await getApiKey(c.env, 'openai');
+    if (!openaiKey) {
       await updateJobStatus(c.env.DB, jobId, 'failed', null, 'OpenAI API key not configured');
-      return c.json({ success: false, error: 'AI service not configured. Please contact admin.' }, 500);
+      return c.json({ success: false, error: 'AI service not configured. Please add OpenAI API key in Admin > API Keys.' }, 500);
     }
     
     // Call OpenAI DALL-E 3
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${openaiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -151,7 +153,7 @@ generateRoutes.post('/image', authMiddleware(), async (c) => {
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${openaiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ model, prompt, size, quality, n: 1 }),
@@ -252,7 +254,7 @@ generateRoutes.post('/text', authMiddleware(), async (c) => {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${openaiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
