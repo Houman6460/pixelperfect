@@ -9,6 +9,13 @@ import { authMiddleware } from '../middleware/auth';
 import { improveScenario, generatePlan } from '../services/scenarioAssistant';
 import { parseScenario } from '../services/scenarioParser';
 import { getAllModels } from '../services/modelRegistry';
+import { 
+  ScenarioRepository, 
+  TimelineDbRepository, 
+  SegmentDbRepository,
+  GenerationPlanRepository,
+  saveGeneratedPlanToDb 
+} from '../services/scenarioDb';
 
 type Variables = {
   user: User;
@@ -545,6 +552,169 @@ scenarioRoutes.post('/scenario/full-pipeline', authMiddleware(), async (c) => {
       success: false,
       error: { code: 'INTERNAL_ERROR', message: error.message || 'Failed to process scenario' },
     }, 500);
+  }
+});
+
+// POST /scenario/save-to-db - Save scenario and generated plan to D1 database
+scenarioRoutes.post('/scenario/save-to-db', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const {
+      scenario_text,
+      improved_text,
+      target_model_id,
+      target_duration_sec,
+      language,
+      style_hints,
+      tags,
+      timeline,
+      segments,
+      generation_plan,
+    } = body;
+
+    if (!scenario_text || !target_model_id || !segments || segments.length === 0) {
+      return c.json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'scenario_text, target_model_id, and segments are required' },
+      }, 400);
+    }
+
+    // Save to D1 using the comprehensive save function
+    const result = await saveGeneratedPlanToDb(
+      c.env.DB,
+      user.id,
+      {
+        originalText: scenario_text,
+        improvedText: improved_text,
+        targetModelId: target_model_id,
+        targetDurationSec: target_duration_sec || 60,
+        language,
+        styleHints: style_hints,
+        tagsJson: tags,
+      },
+      {
+        totalDurationSec: timeline?.total_duration_sec || segments.reduce((sum: number, s: any) => sum + s.duration_sec, 0),
+        targetResolution: timeline?.target_resolution || '1080p',
+        aspectRatio: timeline?.aspect_ratio || '16:9',
+        globalStyle: timeline?.global_style,
+        continuitySettings: timeline?.continuity_settings,
+      },
+      segments.map((s: any, idx: number) => ({
+        position: idx,
+        durationSec: s.duration_sec || 5,
+        modelId: s.model_id || target_model_id,
+        promptText: s.prompt_text || s.prompt,
+        finalPromptText: s.final_prompt_text,
+        negativePrompt: s.negative_prompt,
+        motionProfile: s.motion_profile || s.motion || 'smooth',
+        cameraPath: s.camera_path || s.camera || 'static',
+        transitionType: s.transition_type || s.transition || 'cut',
+        stylePreset: s.style_preset || 'cinematic',
+        inlineTags: s.inline_tags,
+        tagMetadata: s.tag_metadata,
+        lighting: s.lighting,
+        emotion: s.emotion,
+        enhanceEnabled: s.enhance_enabled,
+      })),
+      {
+        planJson: generation_plan || { segments: segments.map((s: any) => s.prompt || s.prompt_text) },
+        frameChaining: true,
+        estimatedTimeSec: segments.length * 120, // Estimate 2 min per segment
+      }
+    );
+
+    return c.json({
+      success: true,
+      data: {
+        scenario_id: result.scenarioId,
+        timeline_id: result.timelineId,
+        segment_ids: result.segmentIds,
+        plan_id: result.planId,
+        message: 'Scenario and timeline saved to database',
+      },
+    });
+  } catch (error: any) {
+    console.error('Save to DB error:', error);
+    return c.json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: error.message || 'Failed to save to database' },
+    }, 500);
+  }
+});
+
+// GET /scenario/:id - Get scenario by ID
+scenarioRoutes.get('/scenario/:id', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user');
+    const scenarioId = c.req.param('id');
+    
+    const repo = new ScenarioRepository(c.env.DB);
+    const scenario = await repo.getById(scenarioId);
+    
+    if (!scenario) {
+      return c.json({ success: false, error: 'Scenario not found' }, 404);
+    }
+    
+    // Verify ownership
+    if (scenario.user_id !== user.id) {
+      return c.json({ success: false, error: 'Access denied' }, 403);
+    }
+    
+    return c.json({
+      success: true,
+      data: scenario,
+    });
+  } catch (error: any) {
+    console.error('Get scenario error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// GET /scenario/user/list - Get all scenarios for current user
+scenarioRoutes.get('/scenario/user/list', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user');
+    
+    const repo = new ScenarioRepository(c.env.DB);
+    const scenarios = await repo.getByUserId(user.id);
+    
+    return c.json({
+      success: true,
+      data: scenarios,
+    });
+  } catch (error: any) {
+    console.error('List scenarios error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// DELETE /scenario/:id - Delete scenario
+scenarioRoutes.delete('/scenario/:id', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user');
+    const scenarioId = c.req.param('id');
+    
+    const repo = new ScenarioRepository(c.env.DB);
+    const scenario = await repo.getById(scenarioId);
+    
+    if (!scenario) {
+      return c.json({ success: false, error: 'Scenario not found' }, 404);
+    }
+    
+    if (scenario.user_id !== user.id) {
+      return c.json({ success: false, error: 'Access denied' }, 403);
+    }
+    
+    await repo.delete(scenarioId);
+    
+    return c.json({
+      success: true,
+      message: 'Scenario deleted',
+    });
+  } catch (error: any) {
+    console.error('Delete scenario error:', error);
+    return c.json({ success: false, error: error.message }, 500);
   }
 });
 
