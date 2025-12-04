@@ -17,13 +17,18 @@ export interface Env {
   
   // Secrets (set via wrangler secret put)
   JWT_SECRET: string;
-  OPENAI_API_KEY: string;
-  ANTHROPIC_API_KEY: string;
-  REPLICATE_API_KEY: string;
-  STABILITY_API_KEY: string;
-  SUNO_API_KEY: string;
-  STRIPE_SECRET_KEY: string;
-  STRIPE_WEBHOOK_SECRET: string;
+  // AI Provider API Keys
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  REPLICATE_API_KEY?: string;
+  STABILITY_API_KEY?: string;
+  GOOGLE_API_KEY?: string;
+  SUNO_API_KEY?: string;
+  KLING_API_KEY?: string;
+  MESHY_API_KEY?: string;
+  // Payment
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
 }
 
 // User types
@@ -172,6 +177,66 @@ export interface TokenRule {
   is_active: number;
   created_at: string;
   updated_at: string;
+}
+
+// Token Economics types
+export interface ProviderCost {
+  id: string;
+  provider: string;
+  model_id: string;
+  display_name: string;
+  operation_type: string;
+  cost_per_unit: number;
+  cost_unit: string;
+  avg_units_per_request: number;
+  currency: string;
+  notes: string | null;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TokenPricing {
+  id: string;
+  operation: string;
+  display_name: string;
+  description: string | null;
+  base_provider_cost: number;
+  tokens_charged: number;
+  markup_percent: number;
+  min_tokens: number;
+  max_tokens: number | null;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanTokenConfig {
+  id: string;
+  plan_id: string;
+  tokens_monthly: number;
+  tokens_bonus: number;
+  rollover_enabled: number;
+  rollover_max_months: number;
+  rollover_cap_percent: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderUsageLog {
+  id: string;
+  provider: string;
+  model: string;
+  operation_type: string;
+  user_id: string | null;
+  job_id: string | null;
+  units_consumed: number;
+  cost_usd: number;
+  request_metadata: string | null;
+  response_time_ms: number | null;
+  success: number;
+  error_message: string | null;
+  created_at: string;
 }
 
 export interface AIModelConfig {

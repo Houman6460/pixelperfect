@@ -17,10 +17,19 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
-      navigate("/dashboard");
+      const user = await login(email, password);
+      
+      // Redirect admins to admin dashboard, regular users to user dashboard
+      const targetPath = user?.role === "admin" ? "/admin" : "/dashboard";
+      
+      // Use setTimeout to allow React state to update before navigation
+      setTimeout(() => {
+        window.location.hash = targetPath;
+      }, 100);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Login failed");
+      const errorMessage = err.response?.data?.error || err.message || "Login failed. Please check your credentials.";
+      setError(errorMessage);
+      console.error('Login error:', err);
     } finally {
       setIsLoading(false);
     }

@@ -39,9 +39,31 @@ import {
   Gauge,
   DollarSign,
   X,
+  LayoutGrid,
+  MessageSquare,
+  Eye,
+  EyeOff,
+  FileText,
 } from "lucide-react";
+import { VideoTimelineEditor, ScenarioAssistant } from "./VideoTimeline";
 
-const API_BASE = "http://localhost:4000";
+// Dynamic API base URL
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('pages.dev')) {
+    return 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev';
+  }
+  return 'http://localhost:4000';
+};
+const API_BASE = getApiBaseUrl();
+
+// Get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 // ===================== MODEL DEFINITIONS =====================
 
@@ -472,7 +494,7 @@ interface VideoStudioProps {
 
 export default function VideoStudio({ onClose }: VideoStudioProps) {
   // State
-  const [activeTab, setActiveTab] = useState<"text-to-video" | "image-to-video" | "video-to-video" | "video-enhancement">("text-to-video");
+  const [activeTab, setActiveTab] = useState<"text-to-video" | "image-to-video" | "video-to-video" | "video-enhancement" | "timeline" | "scenario">("text-to-video");
   const [selectedModel, setSelectedModel] = useState<VideoModel>(TEXT_TO_VIDEO_MODELS[0]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
@@ -488,12 +510,32 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
   
   // Generation inputs
   const [prompt, setPrompt] = useState("");
+  const [dialogue, setDialogue] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [duration, setDuration] = useState(5);
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [cfgScale, setCfgScale] = useState(7);
   const [steps, setSteps] = useState(30);
   const [fps, setFps] = useState(24);
+  
+  // Prompt Assistant state
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isBuildingPrompt, setIsBuildingPrompt] = useState(false);
+  const [finalPrompt, setFinalPrompt] = useState<string | null>(null);
+  const [promptWarnings, setPromptWarnings] = useState<string[]>([]);
+  const [showPromptInspector, setShowPromptInspector] = useState(false);
+  const [promptEnhanced, setPromptEnhanced] = useState(false);
+  
+  // Model capabilities for UI hints
+  const modelMaxChars = selectedModel.id.includes('wan') ? 350 
+    : selectedModel.id.includes('stable') ? 200 
+    : selectedModel.id.includes('kling') ? 600 
+    : 400;
+  const modelSupportsDialogue = selectedModel.id.includes('stable') || selectedModel.id.includes('animatediff') 
+    ? 'none' 
+    : selectedModel.id.includes('wan') || selectedModel.id.includes('minimax') || selectedModel.id.includes('pixverse')
+    ? 'limited' 
+    : 'full';
   
   // File inputs
   const [inputImage, setInputImage] = useState<File | null>(null);
@@ -562,16 +604,42 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
     }
   };
   
-  // Generate video
+  // Generate video (calls /compile first, then generates)
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError(null);
     setGenerationProgress(0);
     
     try {
+      // Step 1: Compile final prompt if not already done
+      let promptToUse = finalPrompt;
+      if (!promptToUse && prompt.trim()) {
+        setGenerationProgress(5);
+        try {
+          const compileResponse = await axios.post(`${API_BASE}/api/v1/prompt-assistant/compile`, {
+            model_id: selectedModel.id,
+            scene_prompt: prompt,
+            dialogue: dialogue || undefined,
+          }, { headers: getAuthHeaders() });
+          
+          if (compileResponse.data.success) {
+            promptToUse = compileResponse.data.data.final_prompt;
+            setFinalPrompt(promptToUse);
+            setPromptWarnings(compileResponse.data.data.warnings || []);
+            setShowPromptInspector(true);
+          }
+        } catch (compileErr) {
+          console.warn("Compile failed, using raw prompt:", compileErr);
+          promptToUse = dialogue ? `${prompt}\n\nDialogue: ${dialogue}` : prompt;
+        }
+      }
+      
+      setGenerationProgress(10);
+      
+      // Step 2: Generate video
       const formData = new FormData();
       formData.append("model", selectedModel.replicateId);
-      formData.append("prompt", prompt);
+      formData.append("prompt", promptToUse || prompt);
       formData.append("duration", duration.toString());
       formData.append("aspect_ratio", aspectRatio);
       
@@ -605,7 +673,7 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
       }, 1000);
       
       const response = await axios.post(`${API_BASE}/api/video/generate`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: { "Content-Type": "multipart/form-data", ...getAuthHeaders() },
       });
       
       clearInterval(progressInterval);
@@ -623,22 +691,75 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
     }
   };
   
-  // Enhance prompt with AI
+  // Enhance prompt with AI using Prompt Assistant
   const handleEnhancePrompt = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || isEnhancing) return;
     
+    setIsEnhancing(true);
     try {
-      const response = await axios.post(`${API_BASE}/api/enhance-prompt`, {
-        prompt,
-        type: "video",
-        model: selectedModel.id,
-      });
+      // Use new /improve endpoint
+      const response = await axios.post(`${API_BASE}/api/v1/prompt-assistant/improve`, {
+        model_id: selectedModel.id,
+        scene_prompt: prompt,
+        tone: "cinematic",
+      }, { headers: getAuthHeaders() });
       
-      if (response.data.enhanced) {
-        setPrompt(response.data.enhanced);
+      if (response.data.success && response.data.data.improved_scene_prompt) {
+        setPrompt(response.data.data.improved_scene_prompt);
+        setPromptEnhanced(true);
+        setTimeout(() => setPromptEnhanced(false), 3000);
+        // Show truncation warning if needed
+        if (response.data.data.was_truncated) {
+          setPromptWarnings(response.data.data.warnings || ['Prompt was truncated to fit model limit']);
+        }
       }
     } catch (err) {
       console.error("Failed to enhance prompt:", err);
+      // Fallback to legacy endpoint
+      try {
+        const fallback = await axios.post(`${API_BASE}/api/v1/prompt-assistant/ai-enhance`, {
+          prompt,
+          model_id: selectedModel.id,
+        }, { headers: getAuthHeaders() });
+        if (fallback.data.success && fallback.data.data.enhanced_prompt) {
+          setPrompt(fallback.data.data.enhanced_prompt);
+        }
+      } catch (e) {
+        console.error("Fallback enhance also failed:", e);
+      }
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
+  
+  // Build final prompt using Prompt Assistant
+  const handleBuildFinalPrompt = async () => {
+    if (!prompt.trim() || isBuildingPrompt) return;
+    
+    setIsBuildingPrompt(true);
+    setPromptWarnings([]);
+    try {
+      // Use new /compile endpoint
+      const response = await axios.post(`${API_BASE}/api/v1/prompt-assistant/compile`, {
+        model_id: selectedModel.id,
+        scene_prompt: prompt,
+        dialogue: dialogue || undefined,
+      }, { headers: getAuthHeaders() });
+      
+      if (response.data.success) {
+        setFinalPrompt(response.data.data.final_prompt);
+        setPromptWarnings(response.data.data.warnings || []);
+        setShowPromptInspector(true);
+      }
+    } catch (err) {
+      console.error("Failed to compile prompt:", err);
+      // Fallback: use raw prompt + dialogue
+      const fallback = dialogue 
+        ? `${prompt}\n\nDialogue: ${dialogue}`
+        : prompt;
+      setFinalPrompt(fallback);
+    } finally {
+      setIsBuildingPrompt(false);
     }
   };
   
@@ -762,6 +883,29 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
               Enhancement
               <span className="px-1.5 py-0.5 text-xs bg-white/20 rounded">{VIDEO_ENHANCEMENT_MODELS.length}</span>
             </button>
+            <button
+              onClick={() => setActiveTab("timeline")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition ${
+                activeTab === "timeline"
+                  ? "bg-gradient-to-r from-red-500 to-orange-500 text-white"
+                  : "bg-slate-800 text-slate-400 hover:text-white"
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              Timeline
+            </button>
+            <button
+              onClick={() => setActiveTab("scenario")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition ${
+                activeTab === "scenario"
+                  ? "bg-gradient-to-r from-indigo-500 to-purple-500 text-white"
+                  : "bg-slate-800 text-slate-400 hover:text-white"
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              Scenario Mode
+              <span className="px-1.5 py-0.5 text-xs bg-emerald-500/80 rounded">NEW</span>
+            </button>
           </div>
           
           {/* Filters */}
@@ -818,6 +962,20 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
       
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Scenario Mode - Full Width */}
+        {activeTab === "scenario" ? (
+          <div className="max-w-4xl mx-auto">
+            <ScenarioAssistant
+              onTimelineGenerated={(timeline) => {
+                console.log('Timeline generated:', timeline);
+                // Switch to timeline tab after generation
+                setActiveTab("timeline");
+              }}
+            />
+          </div>
+        ) : activeTab === "timeline" ? (
+          <VideoTimelineEditor onClose={() => setActiveTab("text-to-video")} />
+        ) : (
         <div className="grid lg:grid-cols-[1fr_400px] gap-6">
           {/* Left Column - Model Selection & Controls */}
           <div className="space-y-6">
@@ -1042,26 +1200,118 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
                   
                   {/* Prompt */}
                   {selectedModel.controls.includes("prompt") && (
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-slate-300">
-                          <Type className="w-4 h-4 inline mr-2" />
-                          Prompt
-                        </label>
-                        <button
-                          onClick={handleEnhancePrompt}
-                          disabled={!prompt.trim()}
-                          className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 disabled:opacity-50"
-                        >
-                          <Sparkles className="w-3 h-3" /> Enhance
-                        </button>
+                    <div className="space-y-3">
+                      {/* Scene Prompt */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label htmlFor="scene-prompt" className="text-sm font-medium text-slate-300">
+                            <Type className="w-4 h-4 inline mr-2" />
+                            Prompt
+                          </label>
+                          <div className="flex items-center gap-2">
+                            {prompt.trim() && (
+                              <button
+                                onClick={() => { setPrompt(''); setFinalPrompt(null); }}
+                                className="px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-white transition"
+                                aria-label="Clear prompt"
+                              >
+                                Clear
+                              </button>
+                            )}
+                            <button
+                              onClick={handleEnhancePrompt}
+                              disabled={!prompt.trim() || isEnhancing}
+                              className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 transition"
+                              aria-label="Improve prompt with AI"
+                            >
+                              {isEnhancing ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Sparkles className="w-3 h-3" />
+                              )}
+                              Improve Prompt
+                            </button>
+                          </div>
+                        </div>
+                        <textarea
+                          id="scene-prompt"
+                          value={prompt}
+                          onChange={(e) => {
+                            setPrompt(e.target.value);
+                            setFinalPrompt(null);
+                            setPromptEnhanced(false);
+                          }}
+                          placeholder="Describe the scene, environment, characters, and motion…"
+                          className="w-full h-24 px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white placeholder-slate-400 resize-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition"
+                          aria-describedby="prompt-hint"
+                        />
+                        {/* Success notification */}
+                        {promptEnhanced && (
+                          <div className="flex items-center gap-2 mt-1 text-xs text-green-400">
+                            <Check className="w-3 h-3" />
+                            Prompt enhanced
+                          </div>
+                        )}
+                        {/* Short prompt limit warning */}
+                        {modelMaxChars <= 250 && (
+                          <p id="prompt-hint" className="text-xs text-amber-400 mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            This model has a short prompt limit ({modelMaxChars} chars). The assistant will compress key details.
+                          </p>
+                        )}
+                        {/* Character count */}
+                        <div className="flex justify-end mt-1">
+                          <span className={`text-xs ${prompt.length > modelMaxChars ? 'text-red-400' : 'text-slate-500'}`}>
+                            {prompt.length}/{modelMaxChars}
+                          </span>
+                        </div>
                       </div>
-                      <textarea
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Describe the video you want to generate..."
-                        className="w-full h-24 px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white placeholder-slate-400 resize-none"
-                      />
+                      
+                      {/* Dialogue Input */}
+                      <div>
+                        <label htmlFor="dialogue-input" className="text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4" />
+                          Dialogue (optional)
+                        </label>
+                        <textarea
+                          id="dialogue-input"
+                          value={dialogue}
+                          onChange={(e) => {
+                            setDialogue(e.target.value);
+                            setFinalPrompt(null);
+                          }}
+                          placeholder="Add character lines (optional)…"
+                          className="w-full h-16 px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white placeholder-slate-400 resize-none font-mono text-sm focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition"
+                          aria-describedby="dialogue-hint"
+                        />
+                        {/* Dialogue support hint */}
+                        {modelSupportsDialogue === 'none' ? (
+                          <p id="dialogue-hint" className="text-xs text-amber-400 mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            This model doesn't interpret dialogue directly. The assistant will convert dialogue into visual/story cues.
+                          </p>
+                        ) : modelSupportsDialogue === 'limited' ? (
+                          <p id="dialogue-hint" className="text-xs text-slate-500 mt-1">
+                            This model has limited dialogue support. Dialogue will be compressed into narrative form.
+                          </p>
+                        ) : (
+                          <p id="dialogue-hint" className="text-xs text-slate-500 mt-1">
+                            Format: Character: "Line..." — Full dialogue support for this model.
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* Prompt Warnings */}
+                      {promptWarnings.length > 0 && (
+                        <div className="space-y-1">
+                          {promptWarnings.map((warning, idx) => (
+                            <div key={idx} className="flex items-start gap-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                              <AlertCircle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                              <p className="text-xs text-yellow-300">{warning}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                   
@@ -1178,6 +1428,49 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
                           />
                         </div>
                       )}
+                      
+                      {/* Prompt Inspector (in Advanced) */}
+                      {finalPrompt && (
+                        <div className="pt-3 border-t border-slate-700">
+                          <button
+                            onClick={() => setShowPromptInspector(!showPromptInspector)}
+                            className="flex items-center gap-2 text-xs text-slate-400 hover:text-white transition w-full"
+                            aria-label="Open Prompt Inspector"
+                            aria-expanded={showPromptInspector ? "true" : "false"}
+                          >
+                            {showPromptInspector ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            Prompt Inspector
+                            <ChevronDown className={`w-3.5 h-3.5 ml-auto transition-transform ${showPromptInspector ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          {showPromptInspector && (
+                            <div className="mt-2 p-3 bg-slate-900/80 border border-slate-600 rounded-lg max-h-40 overflow-y-auto">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs text-slate-500">
+                                  Final Prompt ({finalPrompt.length} chars)
+                                </span>
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(finalPrompt)}
+                                  className="p-1 hover:bg-slate-700 rounded transition"
+                                  title="Copy to clipboard"
+                                  aria-label="Copy final prompt to clipboard"
+                                >
+                                  <Copy className="w-3 h-3 text-slate-400" />
+                                </button>
+                              </div>
+                              <p className="text-xs text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
+                                {finalPrompt}
+                              </p>
+                              <div className="mt-2 pt-2 border-t border-slate-700 flex items-center gap-2">
+                                <Check className="w-3 h-3 text-green-400" />
+                                <span className="text-xs text-green-400">
+                                  Optimized for {selectedModel.name}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </details>
                 </div>
@@ -1267,6 +1560,7 @@ export default function VideoStudio({ onClose }: VideoStudioProps) {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

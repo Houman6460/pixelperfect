@@ -14,8 +14,10 @@ import {
   Server,
   Menu,
   X,
+  Calculator,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import LowBalanceWarning from "./LowBalanceWarning";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -44,7 +46,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { icon: BarChart3, label: "Analytics", href: "/admin" },
     { icon: Users, label: "Users", href: "/admin/users" },
     { icon: CreditCard, label: "Subscriptions", href: "/admin/subscriptions" },
-    { icon: Coins, label: "Token Rules", href: "/admin/token-rules" },
+    { icon: Calculator, label: "Token Economics", href: "/admin/token-economics" },
+    { icon: Coins, label: "Payment Settings", href: "/admin/payment-settings" },
     { icon: Server, label: "Model API Settings", href: "/admin/model-settings" },
     { icon: Settings, label: "Settings", href: "/admin/settings" },
   ];
@@ -165,6 +168,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <main className="flex-1 overflow-auto pt-16 lg:pt-0">
         <div className="p-4 sm:p-6 lg:p-8">{children}</div>
       </main>
+
+      {/* Low Balance Warning */}
+      <LowBalanceWarning threshold={10} />
     </div>
   );
 }

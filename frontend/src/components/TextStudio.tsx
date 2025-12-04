@@ -8,7 +8,23 @@ import {
   PenTool, Edit3, Type, AlignLeft, Globe, Image as ImageIcon, X,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:4000";
+// Dynamic API base URL
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('pages.dev')) {
+    return 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev';
+  }
+  return 'http://localhost:4000';
+};
+const API_BASE = getApiBaseUrl();
+
+// Get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 // ===================== MODEL DEFINITIONS =====================
 interface LLMModel {
@@ -138,7 +154,7 @@ export default function TextStudio() {
         model: selectedModel.modelId, apiType: selectedModel.apiType,
         messages: [{ role: "system", content: buildSystemPrompt() }, ...messages.map(m => ({ role: m.role, content: m.content })), { role: "user", content: inputText }],
         temperature, maxTokens,
-      });
+      }, { headers: getAuthHeaders() });
       setMessages(prev => [...prev, { role: "assistant", content: response.data.content || response.data.text, timestamp: new Date(), model: selectedModel.name }]);
     } catch (error: any) {
       setMessages(prev => [...prev, { role: "assistant", content: `Error: ${error.response?.data?.error || error.message}`, timestamp: new Date(), model: selectedModel.name }]);

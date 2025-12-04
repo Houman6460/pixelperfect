@@ -27,6 +27,12 @@ import {
   Edit3,
   Music,
   Lock,
+  User,
+  LayoutDashboard,
+  LogIn,
+  LogOut,
+  Shield,
+  RefreshCw,
 } from "lucide-react";
 import { ImageUploader } from "./components/ImageUploader";
 import { SettingsForm } from "./components/SettingsForm";
@@ -36,6 +42,7 @@ import { FullscreenViewer } from "./components/FullscreenViewer";
 import { Gallery } from "./components/Gallery";
 import { UpgradeModal } from "./components/UpgradeModal";
 import { useSubscription } from "./contexts/SubscriptionContext";
+import { useAuth } from "./contexts/AuthContext";
 import { StudioType } from "./types/subscription";
 
 // Lazy load heavy studio components for better performance
@@ -54,6 +61,59 @@ const StudioLoader = () => (
     </div>
   </div>
 );
+
+// Error Boundary for lazy-loaded components
+class StudioErrorBoundary extends React.Component<
+  { children: React.ReactNode; onRetry?: () => void },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode; onRetry?: () => void }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Studio loading error:', error, errorInfo);
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+    // Force reload the page to re-fetch chunks
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center h-96">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-red-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-medium text-white mb-1">Failed to load studio</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                {this.state.error?.message || 'An error occurred while loading'}
+              </p>
+            </div>
+            <button
+              onClick={this.handleRetry}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { ProgressStep, Settings, ENHANCEMENT_PRESETS } from "./types";
 
 // Queue item interface
@@ -90,9 +150,29 @@ const baseSteps: ProgressStep[] = [
   { key: "final", label: "Final Pass", status: "pending" },
 ];
 
-const API_BASE = "http://localhost:4000";
+// Dynamic API base URL (without /api suffix - component adds /api/ prefix to routes)
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('pages.dev')) {
+    return 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev';
+  }
+  return 'http://localhost:4000';
+};
+const API_BASE = getApiBaseUrl();
+
+// Get auth headers for API calls
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 function App() {
+  // Auth context
+  const { user, isAuthenticated, isAdmin, logout } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  
   // Subscription access control
   const { 
     hasStudioAccess, 
@@ -188,7 +268,7 @@ function App() {
   // Fetch gallery images when entering edit mode
   useEffect(() => {
     if (appMode === "edit") {
-      axios.get(`${API_BASE}/api/gallery/images`)
+      axios.get(`${API_BASE}/api/gallery/images`, { headers: getAuthHeaders() })
         .then(res => {
           const images = res.data.images || [];
           setEditorGalleryImages(images.map((img: { id: string; filename: string; originalName: string; width: number; height: number; url: string }) => ({
@@ -309,7 +389,10 @@ function App() {
     const endpoint = `${API_BASE}${apiPath}`;
 
     const response = await axios.post(endpoint, form, {
-      headers: { "Content-Type": "multipart/form-data" },
+      headers: { 
+        "Content-Type": "multipart/form-data",
+        ...getAuthHeaders(),
+      },
     });
 
     return {
@@ -519,7 +602,7 @@ function App() {
         prompt: generatePrompt,
         model: model,
         type: "image",
-      });
+      }, { headers: getAuthHeaders() });
 
       if (response.data.success && response.data.enhancedPrompt) {
         setGeneratePrompt(response.data.enhancedPrompt);
@@ -555,7 +638,10 @@ function App() {
       }
 
       const response = await axios.post(`${API_BASE}/api/generate`, form, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: { 
+          "Content-Type": "multipart/form-data",
+          ...getAuthHeaders(),
+        },
         timeout: 180000, // 3 minutes
       });
 
@@ -651,8 +737,9 @@ function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
+        <header className="flex items-center justify-between gap-4">
+          {/* Left: Title */}
+          <div className="flex-shrink-0">
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
               AI Creative Studio
             </h1>
@@ -660,8 +747,89 @@ function App() {
               Generate • Upscale • Enhance • Real-ESRGAN • Gemini AI
             </p>
           </div>
+          
+          {/* Right: User Menu */}
+          <div className="relative flex-shrink-0">
+            {isAuthenticated ? (
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition border border-slate-700"
+                  title="User menu"
+                  aria-label="User menu"
+                >
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-sm text-slate-300 hidden sm:block max-w-[100px] truncate">
+                    {user?.name || user?.email?.split('@')[0]}
+                  </span>
+                </button>
+                
+                {showUserMenu && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowUserMenu(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-48 rounded-lg bg-slate-800 border border-slate-700 shadow-xl z-50 py-1">
+                      <div className="px-3 py-2 border-b border-slate-700">
+                        <p className="text-sm font-medium text-white truncate">{user?.name || 'User'}</p>
+                        <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                        <p className="text-xs text-emerald-400 mt-1">{user?.tokensBalance?.toLocaleString() || 0} tokens</p>
+                      </div>
+                      
+                      <a
+                        href="#/dashboard"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition"
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <LayoutDashboard className="w-4 h-4" />
+                        My Dashboard
+                      </a>
+                      
+                      {isAdmin && (
+                        <a
+                          href="#/admin"
+                          className="flex items-center gap-2 px-3 py-2 text-sm text-purple-400 hover:bg-slate-700 hover:text-purple-300 transition"
+                          onClick={() => setShowUserMenu(false)}
+                        >
+                          <Shield className="w-4 h-4" />
+                          Admin Panel
+                        </a>
+                      )}
+                      
+                      <button
+                        onClick={() => {
+                          logout();
+                          setShowUserMenu(false);
+                          window.location.hash = '/';
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-slate-700 hover:text-red-300 transition w-full text-left"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <a
+                href="#/login"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition text-white text-sm font-medium"
+              >
+                <LogIn className="w-4 h-4" />
+                <span className="hidden sm:inline">Sign In</span>
+              </a>
+            )}
+          </div>
+        </header>
+        
+        {/* Studio Tabs */}
+        <div className="flex flex-col gap-2">
           {/* Tab Groups */}
-          <div className="flex flex-col items-stretch sm:items-end gap-2">
+          <div className="flex flex-col items-stretch sm:items-start gap-2">
             {/* Group Selector - Top Row - Scrollable on mobile */}
             <div className="flex items-center bg-slate-900 rounded-lg p-1 overflow-x-auto scrollbar-hide">
               <button
@@ -787,7 +955,7 @@ function App() {
               </div>
             )}
           </div>
-        </header>
+        </div>
 
         {/* Main Content */}
         {appMode === "generate" ? (
@@ -1068,8 +1236,10 @@ function App() {
                             const formData = new FormData();
                             formData.append("image", blob, `generated-${Date.now()}.png`);
                             formData.append("folderId", "root");
-                            const res = await fetch("http://localhost:4000/api/gallery/images", {
+                            const token = localStorage.getItem('token');
+                            const res = await fetch(`${API_BASE}/api/gallery/images`, {
                               method: "POST",
+                              headers: token ? { Authorization: `Bearer ${token}` } : {},
                               body: formData,
                             });
                             if (res.ok) {
@@ -1454,6 +1624,7 @@ function App() {
                         </p>
                         {item.status === "processing" && (
                           <div className="mt-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+                            {/* eslint-disable-next-line react/forbid-dom-props -- dynamic progress width */}
                             <div
                               className="h-full bg-yellow-500 transition-all duration-300"
                               style={{ width: `${item.progress}%` }}
@@ -1509,8 +1680,9 @@ function App() {
         ) : appMode === "edit" ? (
           /* Edit Mode */
           <div className="flex-1 -mx-4 -mb-4">
-            <Suspense fallback={<StudioLoader />}>
-              <ImageEditor
+            <StudioErrorBoundary>
+              <Suspense fallback={<StudioLoader />}>
+                <ImageEditor
                 galleryImages={editorGalleryImages}
                 onClose={() => setAppMode("upscale")}
                 onSaveToGallery={async (base64, name) => {
@@ -1519,42 +1691,51 @@ function App() {
                       imageBase64: base64,
                       name: name,
                       source: "edit",
-                    });
+                    }, { headers: getAuthHeaders() });
                     alert("Saved to gallery!");
                   } catch (err) {
                     console.error("Failed to save to gallery:", err);
                   }
                 }}
-              />
-            </Suspense>
+                />
+              </Suspense>
+            </StudioErrorBoundary>
           </div>
         ) : appMode === "video" ? (
           /* Video Mode */
           <div className="flex-1 -mx-4 -mb-4">
-            <Suspense fallback={<StudioLoader />}>
-              <VideoStudio />
-            </Suspense>
+            <StudioErrorBoundary>
+              <Suspense fallback={<StudioLoader />}>
+                <VideoStudio />
+              </Suspense>
+            </StudioErrorBoundary>
           </div>
         ) : appMode === "text" ? (
           /* Text Mode */
           <div className="flex-1 -mx-4 -mb-4">
-            <Suspense fallback={<StudioLoader />}>
-              <TextStudio />
-            </Suspense>
+            <StudioErrorBoundary>
+              <Suspense fallback={<StudioLoader />}>
+                <TextStudio />
+              </Suspense>
+            </StudioErrorBoundary>
           </div>
         ) : appMode === "3d" ? (
           /* 3D Mode */
           <div className="flex-1 -mx-4 -mb-4">
-            <Suspense fallback={<StudioLoader />}>
-              <ThreeDStudio />
-            </Suspense>
+            <StudioErrorBoundary>
+              <Suspense fallback={<StudioLoader />}>
+                <ThreeDStudio />
+              </Suspense>
+            </StudioErrorBoundary>
           </div>
         ) : appMode === "music" ? (
           /* Music Mode */
           <div className="flex-1 -mx-4 -mb-4">
-            <Suspense fallback={<StudioLoader />}>
-              <MusicStudio />
-            </Suspense>
+            <StudioErrorBoundary>
+              <Suspense fallback={<StudioLoader />}>
+                <MusicStudio />
+              </Suspense>
+            </StudioErrorBoundary>
           </div>
         ) : null}
       </div>

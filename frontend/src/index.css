@@ -48,12 +48,15 @@ body {
 }
 
 /* Hide scrollbar but keep functionality */
+/* stylelint-disable-next-line property-no-unknown -- scrollbar-width is standard but not fully supported */
 .scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox 64+ - Chrome 121+, not Safari */
 }
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;
+  display: none; /* Chrome, Safari, Opera - fallback for browsers without scrollbar-width */
+  width: 0;
+  height: 0;
 }
 
 /* Custom breakpoint for extra small screens */

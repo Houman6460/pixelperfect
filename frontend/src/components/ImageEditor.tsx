@@ -40,7 +40,23 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:4000";
+// Dynamic API base URL
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('pages.dev')) {
+    return 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev';
+  }
+  return 'http://localhost:4000';
+};
+const API_BASE = getApiBaseUrl();
+
+// Get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 interface GalleryImage {
   id: string;

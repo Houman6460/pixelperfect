@@ -6,7 +6,23 @@ import {
   Maximize2, Image as ImageIcon, Type, Layers, Shapes, X, Zap,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:4000";
+// Dynamic API base URL
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('pages.dev')) {
+    return 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev';
+  }
+  return 'http://localhost:4000';
+};
+const API_BASE = getApiBaseUrl();
+
+// Get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 // ===================== MODEL DEFINITIONS =====================
 interface ThreeDModel {
@@ -392,7 +408,7 @@ export default function ThreeDStudio() {
       }, 1000);
 
       const response = await axios.post(`${API_BASE}/api/3d/generate`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: { "Content-Type": "multipart/form-data", ...getAuthHeaders() },
         timeout: 300000, // 5 minutes
       });
 

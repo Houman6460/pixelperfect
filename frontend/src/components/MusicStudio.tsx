@@ -51,7 +51,17 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:4000";
+// Dynamic API base URL (without /api suffix - component adds /api/ prefix to routes)
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/api$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('pages.dev')) {
+    return 'https://pixelperfect-api.houman-ghavamzadeh.workers.dev';
+  }
+  return 'http://localhost:4000';
+};
+const API_BASE = getApiBaseUrl();
 
 // Instrument definitions with verified Font Awesome 6 Free icons
 const INSTRUMENTS = [
@@ -3149,6 +3159,7 @@ export default function MusicStudio() {
               </div>
             </div>
             <div className="relative">
+              {/* eslint-disable-next-line react/forbid-dom-props -- dynamic font size required */}
               <textarea
                 ref={lyricsTextareaRef}
                 value={lyrics}

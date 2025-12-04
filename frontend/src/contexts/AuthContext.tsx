@@ -21,7 +21,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -78,37 +78,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const response = await authApi.login({ email, password });
-    // Handle nested data format from Workers API
-    const data = response.data?.data || response.data;
-    if (data?.token) {
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      setUser({
-        ...data.user,
-        tokensBalance: data.user.tokens || 0,
-        tokensUsed: 0,
-      });
-    } else {
-      throw new Error(response.data?.error || 'Login failed');
+  const login = async (email: string, password: string): Promise<User> => {
+    try {
+      const response = await authApi.login({ email, password });
+      // Handle nested data format from Workers API
+      const data = response.data?.data || response.data;
+      
+      if (data?.token && data?.user) {
+        localStorage.setItem("token", data.token);
+        const loggedInUser: User = {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.name || '',
+          role: data.user.role || 'user',
+          tokensBalance: data.user.tokens || data.user.tokensBalance || 0,
+          tokensUsed: data.user.tokensUsed || 0,
+          subscriptionId: data.user.subscriptionId || null,
+        };
+        localStorage.setItem("user", JSON.stringify(loggedInUser));
+        setUser(loggedInUser);
+        return loggedInUser;
+      } else if (response.data?.error) {
+        throw new Error(response.data.error);
+      } else {
+        throw new Error('Login failed - invalid response');
+      }
+    } catch (error: any) {
+      // Re-throw with proper error message
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
-    const response = await authApi.register({ email, password, name });
-    // Handle nested data format from Workers API
-    const data = response.data?.data || response.data;
-    if (data?.token) {
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      setUser({
-        ...data.user,
-        tokensBalance: data.user.tokens || 0,
-        tokensUsed: 0,
-      });
-    } else {
-      throw new Error(response.data?.error || 'Registration failed');
+    try {
+      const response = await authApi.register({ email, password, name });
+      // Handle nested data format from Workers API
+      const data = response.data?.data || response.data;
+      
+      if (data?.token && data?.user) {
+        localStorage.setItem("token", data.token);
+        const newUser: User = {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.name || name,
+          role: data.user.role || 'user',
+          tokensBalance: data.user.tokens || data.user.tokensBalance || 0,
+          tokensUsed: 0,
+          subscriptionId: null,
+        };
+        localStorage.setItem("user", JSON.stringify(newUser));
+        setUser(newUser);
+      } else if (response.data?.error) {
+        throw new Error(response.data.error);
+      } else {
+        throw new Error('Registration failed - invalid response');
+      }
+    } catch (error: any) {
+      // Re-throw with proper error message
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
     }
   };
 

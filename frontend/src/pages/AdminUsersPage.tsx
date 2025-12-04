@@ -30,9 +30,24 @@ export default function AdminUsersPage() {
   const loadUsers = async () => {
     try {
       const response = await adminApi.getUsers();
-      setUsers(response.data);
+      // Handle API response format: { success: true, data: [...] }
+      const userData = response.data?.data || response.data || [];
+      // Transform API fields to frontend format
+      const transformedUsers = (Array.isArray(userData) ? userData : []).map((u: any) => ({
+        id: u.id,
+        email: u.email || '',
+        name: u.name || 'Unknown',
+        role: u.role || 'user',
+        subscriptionId: u.subscription_id || null,
+        tokensBalance: u.tokens || 0,
+        tokensUsed: u.tokens_used || 0,
+        isActive: u.is_active === 1 || u.is_active === true,
+        createdAt: u.created_at || new Date().toISOString(),
+      }));
+      setUsers(transformedUsers);
     } catch (error) {
       console.error("Failed to load users:", error);
+      setUsers([]);
     } finally {
       setIsLoading(false);
     }
@@ -63,8 +78,8 @@ export default function AdminUsersPage() {
 
   const filteredUsers = users.filter(
     (user) =>
-      user.name.toLowerCase().includes(search.toLowerCase()) ||
-      user.email.toLowerCase().includes(search.toLowerCase())
+      (user.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (user.email || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { subscriptionApi } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
 
 // Lazy load Lottie to improve initial bundle size and LCP
 const Lottie = lazy(() => import("lottie-react"));
@@ -269,6 +270,7 @@ interface ApiPlan {
 }
 
 export default function LandingPage() {
+  const { isAuthenticated, isAdmin } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [robotAnimation, setRobotAnimation] = useState<object | null>(null);
@@ -429,10 +431,18 @@ export default function LandingPage() {
             </div>
             
             <div className="hidden md:flex items-center gap-3">
-              <Link to="/login" className="px-4 py-2 text-slate-300 hover:text-white transition text-sm">Sign In</Link>
-              <Link to="/register" className="px-5 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium text-sm hover:opacity-90 transition">
-                Get Started Free
-              </Link>
+              {isAuthenticated ? (
+                <Link to={isAdmin ? "/admin" : "/dashboard"} className="px-5 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium text-sm hover:opacity-90 transition">
+                  {isAdmin ? "Admin Dashboard" : "Dashboard"}
+                </Link>
+              ) : (
+                <>
+                  <Link to="/login" className="px-4 py-2 text-slate-300 hover:text-white transition text-sm">Sign In</Link>
+                  <Link to="/register" className="px-5 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium text-sm hover:opacity-90 transition">
+                    Get Started Free
+                  </Link>
+                </>
+              )}
             </div>
             
             {/* Mobile menu button */}
@@ -450,8 +460,16 @@ export default function LandingPage() {
                 <a href="#pricing" className="px-4 py-2 text-slate-300 hover:text-white">Pricing</a>
                 <a href="#faq" className="px-4 py-2 text-slate-300 hover:text-white">FAQ</a>
                 <div className="flex gap-2 px-4 pt-2">
-                  <Link to="/login" className="flex-1 py-2 text-center text-slate-300 border border-slate-700 rounded-lg">Sign In</Link>
-                  <Link to="/register" className="flex-1 py-2 text-center bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg">Get Started</Link>
+                  {isAuthenticated ? (
+                    <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex-1 py-2 text-center bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg">
+                      {isAdmin ? "Admin Dashboard" : "Dashboard"}
+                    </Link>
+                  ) : (
+                    <>
+                      <Link to="/login" className="flex-1 py-2 text-center text-slate-300 border border-slate-700 rounded-lg">Sign In</Link>
+                      <Link to="/register" className="flex-1 py-2 text-center bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg">Get Started</Link>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -462,7 +480,7 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="pt-16 sm:pt-24 pb-20 px-4 relative overflow-hidden" aria-labelledby="hero-heading">
         {/* Animated Mesh Gradient Background */}
-        <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {/* Gradient Orbs */}
           <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-500/30 rounded-full blur-3xl animate-blob" />
           <div className="absolute top-1/3 -right-20 w-96 h-96 bg-pink-500/30 rounded-full blur-3xl animate-blob animation-delay-2000" />
@@ -534,9 +552,15 @@ export default function LandingPage() {
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-                <Link to="/register" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-lg hover:opacity-90 transition shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105">
-                  Start Creating Free <ArrowRight className="w-5 h-5" />
-                </Link>
+                {isAuthenticated ? (
+                  <Link to={isAdmin ? "/admin" : "/dashboard"} className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-lg hover:opacity-90 transition shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105">
+                    {isAdmin ? "Go to Admin Dashboard" : "Go to Dashboard"} <ArrowRight className="w-5 h-5" />
+                  </Link>
+                ) : (
+                  <Link to="/register" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-lg hover:opacity-90 transition shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105">
+                    Start Creating Free <ArrowRight className="w-5 h-5" />
+                  </Link>
+                )}
                 <Link to="/app" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-slate-800/80 text-white font-semibold text-lg hover:bg-slate-700 transition border border-slate-700 backdrop-blur-sm hover:scale-105">
                   <Play className="w-5 h-5" /> Try Demo
                 </Link>
@@ -661,12 +685,12 @@ export default function LandingPage() {
             ))}
             
             {/* Robot Animation - middle position (5th slot) - Interactive! */}
+            {/* eslint-disable-next-line react/forbid-dom-props */}
             <div 
               ref={robotContainerRef}
               onMouseMove={handleRobotMouseMove}
               onMouseLeave={handleRobotMouseLeave}
-              className="hidden xl:flex items-center justify-center p-6 rounded-2xl bg-gradient-to-br from-purple-500/5 to-cyan-500/5 border border-purple-500/20 cursor-pointer group/robot relative overflow-hidden"
-              style={{ perspective: "1000px" }}
+              className="hidden xl:flex items-center justify-center p-6 rounded-2xl bg-gradient-to-br from-purple-500/5 to-cyan-500/5 border border-purple-500/20 cursor-pointer group/robot relative overflow-hidden [perspective:1000px]"
             >
               {/* Purple glow behind robot */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -674,6 +698,7 @@ export default function LandingPage() {
               </div>
               
               {robotAnimation && (
+                /* eslint-disable-next-line react/forbid-dom-props */
                 <div 
                   className="relative w-full max-w-[280px] aspect-square transition-transform duration-200 ease-out z-10"
                   style={{
@@ -828,8 +853,8 @@ export default function LandingPage() {
                 /* Professional Card with Glowing Border Effect */
                 <div key={i} className="relative group">
                   {/* Animated gradient border */}
-                  <div className="absolute -inset-[2px] rounded-2xl bg-gradient-to-r from-purple-600 via-pink-600 via-purple-600 to-pink-600 opacity-75 blur-sm group-hover:opacity-100 transition duration-500 animate-gradient-border" />
-                  <div className="absolute -inset-[2px] rounded-2xl bg-gradient-to-r from-purple-600 via-pink-600 via-purple-600 to-pink-600 animate-gradient-border" />
+                  <div className="absolute -inset-[2px] rounded-2xl bg-gradient-to-r from-purple-600 via-pink-600 via-purple-600 to-pink-600 opacity-75 blur-sm group-hover:opacity-100 transition duration-500 animate-gradient-border pointer-events-none" />
+                  <div className="absolute -inset-[2px] rounded-2xl bg-gradient-to-r from-purple-600 via-pink-600 via-purple-600 to-pink-600 animate-gradient-border pointer-events-none" />
                   
                   {/* Card content */}
                   <div className="relative p-6 rounded-2xl bg-slate-900 h-full">

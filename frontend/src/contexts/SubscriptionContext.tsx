@@ -37,8 +37,12 @@ interface SubscriptionContextType {
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
+// All studios for admin access
+const ALL_STUDIOS: StudioType[] = ['image', 'video', 'sound', 'text', '3d'];
+
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   
   // State
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -58,7 +62,16 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     try {
       const response = await subscriptionApi.getPlans();
       if (response.data?.success && response.data?.data) {
-        setPlans(response.data.data.plans || []);
+        // Ensure studios and features are arrays (might be JSON strings from API)
+        const rawPlans = response.data.data.plans || [];
+        const parsedPlans = rawPlans.map((plan: any) => ({
+          ...plan,
+          studios: Array.isArray(plan.studios) ? plan.studios : 
+            (typeof plan.studios === 'string' ? JSON.parse(plan.studios) : []),
+          features: Array.isArray(plan.features) ? plan.features :
+            (typeof plan.features === 'string' ? JSON.parse(plan.features) : []),
+        }));
+        setPlans(parsedPlans);
         setBillingPeriods(response.data.data.billingPeriods || []);
       }
     } catch (err) {
@@ -88,23 +101,37 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       return;
     }
     
+    // Admins get access to all studios
+    if (isAdmin) {
+      setAccessibleStudios([...ALL_STUDIOS]);
+      return;
+    }
+    
     try {
       // Get accessible studios from user's active subscriptions
       const allStudios: StudioType[] = [];
-      userSubscriptions.forEach((sub: any) => {
-        const studios = sub.studios || [];
-        studios.forEach((studio: StudioType) => {
-          if (!allStudios.includes(studio)) {
-            allStudios.push(studio);
+      if (Array.isArray(userSubscriptions)) {
+        userSubscriptions.forEach((sub: any) => {
+          // Handle studios as JSON string or array
+          let studios = sub.studios || [];
+          if (typeof studios === 'string') {
+            try { studios = JSON.parse(studios); } catch { studios = []; }
+          }
+          if (Array.isArray(studios)) {
+            studios.forEach((studio: StudioType) => {
+              if (!allStudios.includes(studio)) {
+                allStudios.push(studio);
+              }
+            });
           }
         });
-      });
+      }
       setAccessibleStudios(allStudios);
     } catch (err) {
       console.error("Failed to fetch access:", err);
       setAccessibleStudios([]);
     }
-  }, [isAuthenticated, userSubscriptions]);
+  }, [isAuthenticated, isAdmin, userSubscriptions]);
   
   // Subscribe to a plan
   const subscribe = useCallback(async (planId: string, billingPeriod: BillingPeriod): Promise<boolean> => {
@@ -164,12 +191,18 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   
   // Check if user has access to a studio
   const hasStudioAccess = useCallback((studio: StudioType): boolean => {
+    // Admins have access to all studios
+    if (isAdmin) return true;
     return accessibleStudios.includes(studio);
-  }, [accessibleStudios]);
+  }, [accessibleStudios, isAdmin]);
   
   // Get plans that include a specific studio
   const getPlansForStudio = useCallback((studio: StudioType): SubscriptionPlan[] => {
-    return plans.filter(plan => plan.studios.includes(studio));
+    if (!Array.isArray(plans)) return [];
+    return plans.filter(plan => {
+      const studios = Array.isArray(plan.studios) ? plan.studios : [];
+      return studios.includes(studio);
+    });
   }, [plans]);
   
   // Initial load

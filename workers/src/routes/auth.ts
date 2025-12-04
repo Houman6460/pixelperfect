@@ -82,7 +82,8 @@ authRoutes.post('/register', async (c) => {
 // Login
 authRoutes.post('/login', async (c) => {
   try {
-    const { email, password } = await c.req.json();
+    const body = await c.req.json();
+    const { email, password } = body;
     
     if (!email || !password) {
       return c.json({
@@ -97,6 +98,7 @@ authRoutes.post('/login', async (c) => {
     ).bind(email.toLowerCase()).first<User>();
     
     if (!user) {
+      console.log('User not found for email:', email.toLowerCase());
       return c.json({
         success: false,
         error: 'Invalid email or password',
@@ -107,10 +109,20 @@ authRoutes.post('/login', async (c) => {
     const isValidPassword = await verifyPassword(password, user.password_hash);
     
     if (!isValidPassword) {
+      console.log('Invalid password for user:', user.email);
       return c.json({
         success: false,
         error: 'Invalid email or password',
       }, 401);
+    }
+    
+    // Check if JWT_SECRET exists
+    if (!c.env.JWT_SECRET) {
+      console.error('JWT_SECRET is not configured');
+      return c.json({
+        success: false,
+        error: 'Server configuration error',
+      }, 500);
     }
     
     // Update last login
@@ -144,11 +156,11 @@ authRoutes.post('/login', async (c) => {
         token,
       },
     });
-  } catch (error) {
-    console.error('Login error:', error);
+  } catch (error: any) {
+    console.error('Login error:', error?.message || error);
     return c.json({
       success: false,
-      error: 'Failed to login',
+      error: 'Failed to login: ' + (error?.message || 'Unknown error'),
     }, 500);
   }
 });

@@ -31,9 +31,14 @@ export default function RegisterPage() {
 
     try {
       await register(email, password, name);
-      navigate("/dashboard");
+      // Use setTimeout to allow React state to update before navigation
+      setTimeout(() => {
+        window.location.hash = "/dashboard";
+      }, 100);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Registration failed");
+      const errorMessage = err.response?.data?.error || err.message || "Registration failed. Please try again.";
+      setError(errorMessage);
+      console.error('Registration error:', err);
     } finally {
       setIsLoading(false);
     }

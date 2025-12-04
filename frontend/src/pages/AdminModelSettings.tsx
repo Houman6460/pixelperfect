@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import {
   Settings, Check, X, AlertCircle, Loader2, RefreshCw, Server, Cloud,
   Video, Type, Image as ImageIcon, Box, Music, ChevronDown, ChevronRight,
-  Search, Filter, ToggleLeft, ToggleRight, Zap, Shield,
+  Search, Filter, ToggleLeft, ToggleRight, Zap, Shield, Key, Eye, EyeOff,
+  Trash2, TestTube, Plus, ArrowLeftRight, Copy, ExternalLink,
 } from "lucide-react";
-
-const API_BASE = "http://localhost:4000";
+import { adminApi } from "../lib/api";
+import DashboardLayout from "../components/DashboardLayout";
 
 interface ModelApiSetting {
   modelId: string;
   modelName: string;
-  category: "video" | "text" | "image" | "3d" | "music";
+  category: "video" | "text" | "image" | "3d" | "audio" | "music";
   provider: string;
   useDirectApi: boolean;
   directApiAvailable: boolean;
@@ -24,13 +24,52 @@ interface ApiKeys {
   [key: string]: "configured" | "not_configured";
 }
 
-const CATEGORY_INFO = {
+interface ApiKeyInfo {
+  name: string;
+  configured: boolean;
+  source: "user" | "env" | "none";
+  maskedKey: string | null;
+  hasBackup: boolean;
+  backupMaskedKey: string | null;
+}
+
+interface FallbackConfig {
+  enabled: boolean;
+  primaryPreference: "direct" | "replicate";
+  autoSwitch: boolean;
+  retryCount: number;
+}
+
+const CATEGORY_INFO: Record<string, { icon: any; label: string; color: string; bgColor: string }> = {
   video: { icon: Video, label: "Video", color: "text-red-400", bgColor: "bg-red-500/10" },
   text: { icon: Type, label: "Text/LLM", color: "text-indigo-400", bgColor: "bg-indigo-500/10" },
   image: { icon: ImageIcon, label: "Image", color: "text-emerald-400", bgColor: "bg-emerald-500/10" },
   "3d": { icon: Box, label: "3D", color: "text-cyan-400", bgColor: "bg-cyan-500/10" },
-  music: { icon: Music, label: "Music", color: "text-purple-400", bgColor: "bg-purple-500/10" },
+  audio: { icon: Music, label: "Music", color: "text-purple-400", bgColor: "bg-purple-500/10" },
 };
+
+// API providers configuration with dashboard URLs
+const API_PROVIDERS = [
+  { id: "openai", name: "OpenAI", color: "emerald", url: "https://platform.openai.com/api-keys" },
+  { id: "anthropic", name: "Anthropic", color: "orange", url: "https://console.anthropic.com/settings/keys" },
+  { id: "google", name: "Google AI", color: "blue", url: "https://aistudio.google.com/app/apikey" },
+  { id: "replicate", name: "Replicate", color: "purple", url: "https://replicate.com/account/api-tokens" },
+  { id: "stability", name: "Stability AI", color: "pink", url: "https://platform.stability.ai/account/keys" },
+  { id: "mistral", name: "Mistral", color: "amber", url: "https://console.mistral.ai/api-keys" },
+  { id: "deepseek", name: "DeepSeek", color: "sky", url: "https://platform.deepseek.com/api_keys" },
+  { id: "bfl", name: "BFL (Flux)", color: "lime", url: "https://api.bfl.ml/auth/profile" },
+  { id: "ideogram", name: "Ideogram", color: "fuchsia", url: "https://ideogram.ai/manage-api" },
+  { id: "suno", name: "Suno", color: "yellow", url: "https://suno.com/account" },
+  { id: "udio", name: "Udio", color: "orange", url: "https://www.udio.com/settings" },
+  { id: "kling", name: "Kling", color: "red", url: "https://klingai.com/dev" },
+  { id: "minimax", name: "MiniMax", color: "slate", url: "https://www.minimaxi.com/platform" },
+  { id: "pixverse", name: "PixVerse", color: "zinc", url: "https://pixverse.ai/settings" },
+  { id: "meshy", name: "Meshy", color: "cyan", url: "https://www.meshy.ai/api" },
+  { id: "elevenlabs", name: "ElevenLabs", color: "indigo", url: "https://elevenlabs.io/app/settings/api-keys" },
+  { id: "runway", name: "Runway", color: "rose", url: "https://app.runwayml.com/settings/api-keys" },
+  { id: "luma", name: "Luma AI", color: "teal", url: "https://lumalabs.ai/dream-machine/api/keys" },
+  { id: "midjourney", name: "Midjourney", color: "violet", url: "https://www.midjourney.com/account" },
+];
 
 export default function AdminModelSettings() {
   const [models, setModels] = useState<ModelApiSetting[]>([]);
@@ -38,25 +77,60 @@ export default function AdminModelSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["video", "text", "image", "3d", "music"]));
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["video", "text", "image", "3d", "audio"]));
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  
+  // API Key Management State
+  const [apiKeyData, setApiKeyData] = useState<Record<string, ApiKeyInfo>>({});
+  const [fallbackConfig, setFallbackConfig] = useState<FallbackConfig>({
+    enabled: true,
+    primaryPreference: "direct",
+    autoSwitch: true,
+    retryCount: 3,
+  });
+  const [showApiKeys, setShowApiKeys] = useState(true);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [newKeyValue, setNewKeyValue] = useState("");
+  const [isBackupKey, setIsBackupKey] = useState(false);
+  const [testingKey, setTestingKey] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ provider: string; success: boolean; message: string } | null>(null);
+  const [savingKey, setSavingKey] = useState(false);
 
   // Fetch model settings
   useEffect(() => {
     fetchSettings();
+    fetchApiKeys();
   }, []);
+
+  const fetchApiKeys = async () => {
+    try {
+      const response = await adminApi.getApiKeys();
+      if (response.data?.success) {
+        setApiKeyData(response.data.data?.apiKeys || {});
+        setFallbackConfig(response.data.data?.fallback || {
+          enabled: true,
+          primaryPreference: "direct",
+          autoSwitch: true,
+          retryCount: 3,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to fetch API keys:", err);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_BASE}/api/admin/model-api-settings`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setModels(response.data.settings.models);
-      setApiKeys(response.data.apiKeys);
-      setError(null);
+      const response = await adminApi.getModelApiSettings();
+      if (response.data?.success) {
+        setModels(response.data.data?.models || []);
+        setApiKeys(response.data.data?.apiKeys || {});
+        setError(null);
+      } else {
+        setError(response.data?.error || "Failed to load settings");
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to load settings");
     } finally {
@@ -64,20 +138,74 @@ export default function AdminModelSettings() {
     }
   };
 
+  const saveApiKey = async (provider: string) => {
+    if (!newKeyValue.trim()) return;
+    try {
+      setSavingKey(true);
+      const response = await adminApi.setApiKey(provider, newKeyValue.trim(), isBackupKey);
+      if (response.data?.success) {
+        await fetchApiKeys();
+        setEditingKey(null);
+        setNewKeyValue("");
+        setIsBackupKey(false);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Failed to save API key");
+    } finally {
+      setSavingKey(false);
+    }
+  };
+
+  const deleteApiKey = async (provider: string, isBackup: boolean = false) => {
+    if (!confirm(`Delete ${isBackup ? "backup " : ""}API key for ${provider}?`)) return;
+    try {
+      await adminApi.deleteApiKey(provider, isBackup);
+      await fetchApiKeys();
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Failed to delete API key");
+    }
+  };
+
+  const testApiKey = async (provider: string) => {
+    try {
+      setTestingKey(provider);
+      setTestResult(null);
+      const response = await adminApi.testApiKey(provider);
+      setTestResult({
+        provider,
+        success: response.data?.success,
+        message: response.data?.message || "Test completed",
+      });
+    } catch (err: any) {
+      setTestResult({
+        provider,
+        success: false,
+        message: err.response?.data?.error || "Test failed",
+      });
+    } finally {
+      setTestingKey(null);
+    }
+  };
+
+  const updateFallbackSetting = async (updates: Partial<FallbackConfig>) => {
+    try {
+      const newConfig = { ...fallbackConfig, ...updates };
+      setFallbackConfig(newConfig);
+      await adminApi.updateFallbackConfig(newConfig);
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Failed to update fallback config");
+    }
+  };
+
   const toggleModel = async (modelId: string) => {
     try {
       setSaving(modelId);
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `${API_BASE}/api/admin/model-api-settings/${modelId}/toggle`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await adminApi.toggleModelApiSetting(modelId);
       
-      if (response.data.success) {
+      if (response.data?.success) {
         setModels(prev =>
           prev.map(m =>
-            m.modelId === modelId ? { ...m, useDirectApi: response.data.model.useDirectApi } : m
+            m.modelId === modelId ? { ...m, useDirectApi: response.data.data?.useDirectApi } : m
           )
         );
       }
@@ -120,15 +248,17 @@ export default function AdminModelSettings() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6">
-      <div className="max-w-6xl mx-auto">
+    <DashboardLayout>
+      <div className="space-y-6">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -154,6 +284,258 @@ export default function AdminModelSettings() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* API Key Management Section */}
+        <div className="mb-6 bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+          <button
+            onClick={() => setShowApiKeys(!showApiKeys)}
+            className="w-full p-4 flex items-center justify-between hover:bg-slate-700/30 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600">
+                <Key className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left">
+                <h2 className="text-lg font-semibold text-white">API Key Management</h2>
+                <p className="text-sm text-slate-400">Configure provider API keys directly from the dashboard</p>
+              </div>
+            </div>
+            <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${showApiKeys ? "rotate-180" : ""}`} />
+          </button>
+
+          {showApiKeys && (
+            <div className="p-4 border-t border-slate-700/50 space-y-6">
+              {/* Fallback Configuration */}
+              <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                  <ArrowLeftRight className="w-4 h-4 text-purple-400" />
+                  Backup & Fallback Settings
+                </h3>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                    <span className="text-sm text-slate-300">Enable Fallback</span>
+                    <button
+                      onClick={() => updateFallbackSetting({ enabled: !fallbackConfig.enabled })}
+                      className={`w-10 h-6 rounded-full transition-colors ${fallbackConfig.enabled ? "bg-emerald-500" : "bg-slate-600"}`}
+                      title="Toggle fallback"
+                      aria-label={`Fallback ${fallbackConfig.enabled ? "enabled" : "disabled"}`}
+                    >
+                      <div className={`w-4 h-4 bg-white rounded-full transition-transform mx-1 ${fallbackConfig.enabled ? "translate-x-4" : ""}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                    <span className="text-sm text-slate-300">Auto-Switch</span>
+                    <button
+                      onClick={() => updateFallbackSetting({ autoSwitch: !fallbackConfig.autoSwitch })}
+                      className={`w-10 h-6 rounded-full transition-colors ${fallbackConfig.autoSwitch ? "bg-emerald-500" : "bg-slate-600"}`}
+                      title="Toggle auto-switch"
+                      aria-label={`Auto-switch ${fallbackConfig.autoSwitch ? "enabled" : "disabled"}`}
+                    >
+                      <div className={`w-4 h-4 bg-white rounded-full transition-transform mx-1 ${fallbackConfig.autoSwitch ? "translate-x-4" : ""}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                    <span className="text-sm text-slate-300">Primary</span>
+                    <select
+                      value={fallbackConfig.primaryPreference}
+                      onChange={(e) => updateFallbackSetting({ primaryPreference: e.target.value as "direct" | "replicate" })}
+                      className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white"
+                      title="Primary API preference"
+                      aria-label="Primary API preference"
+                    >
+                      <option value="direct">Direct API</option>
+                      <option value="replicate">Replicate</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                    <span className="text-sm text-slate-300">Retry Count</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="5"
+                      value={fallbackConfig.retryCount}
+                      onChange={(e) => updateFallbackSetting({ retryCount: parseInt(e.target.value) || 3 })}
+                      className="w-16 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white text-center"
+                      title="Retry count"
+                      aria-label="Retry count"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-3">
+                  When enabled, if primary API fails, system automatically switches to backup. Add backup keys below for seamless failover.
+                </p>
+              </div>
+
+              {/* API Keys Grid */}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {API_PROVIDERS.map((provider) => {
+                  const keyInfo = apiKeyData[provider.id];
+                  const isEditing = editingKey === provider.id;
+                  const isTesting = testingKey === provider.id;
+                  
+                  return (
+                    <div
+                      key={provider.id}
+                      className={`p-4 rounded-lg border transition-all ${
+                        keyInfo?.configured
+                          ? "bg-emerald-500/5 border-emerald-500/30"
+                          : "bg-slate-800/50 border-slate-700/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${keyInfo?.configured ? "bg-emerald-400" : "bg-slate-500"}`} />
+                          <span className="font-medium text-white">{provider.name}</span>
+                          <a
+                            href={provider.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 hover:bg-slate-700/50 rounded transition-colors"
+                            title={`Get API key from ${provider.name}`}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-slate-400 hover:text-cyan-400" />
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {keyInfo?.source === "env" && (
+                            <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">ENV</span>
+                          )}
+                          {keyInfo?.source === "user" && (
+                            <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">Custom</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <input
+                            type="password"
+                            value={newKeyValue}
+                            onChange={(e) => setNewKeyValue(e.target.value)}
+                            placeholder="Enter API key..."
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-sm text-white placeholder-slate-500"
+                          />
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-1 text-xs text-slate-400">
+                              <input
+                                type="checkbox"
+                                checked={isBackupKey}
+                                onChange={(e) => setIsBackupKey(e.target.checked)}
+                                className="rounded border-slate-600"
+                              />
+                              Save as Backup
+                            </label>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => saveApiKey(provider.id)}
+                              disabled={savingKey || !newKeyValue.trim()}
+                              className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 rounded text-sm text-white flex items-center justify-center gap-1"
+                            >
+                              {savingKey ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                              Save
+                            </button>
+                            <button
+                              onClick={() => { setEditingKey(null); setNewKeyValue(""); setIsBackupKey(false); }}
+                              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-sm text-white"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {keyInfo?.configured && (
+                            <div className="mb-2">
+                              <code className="text-xs text-slate-400 bg-slate-900/50 px-2 py-1 rounded">
+                                {keyInfo.maskedKey}
+                              </code>
+                            </div>
+                          )}
+                          {keyInfo?.hasBackup && (
+                            <div className="mb-2 flex items-center gap-1">
+                              <span className="text-xs text-amber-400">Backup:</span>
+                              <code className="text-xs text-slate-400 bg-slate-900/50 px-2 py-1 rounded">
+                                {keyInfo.backupMaskedKey}
+                              </code>
+                              <button
+                                onClick={() => deleteApiKey(provider.id, true)}
+                                className="p-1 hover:bg-red-500/20 rounded"
+                                title="Remove backup key"
+                              >
+                                <Trash2 className="w-3 h-3 text-red-400" />
+                              </button>
+                            </div>
+                          )}
+                          
+                          {/* Test Result */}
+                          {testResult?.provider === provider.id && (
+                            <div className={`mb-2 text-xs p-2 rounded ${testResult.success ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300"}`}>
+                              {testResult.message}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => { setEditingKey(provider.id); setNewKeyValue(""); }}
+                              className="flex-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white flex items-center justify-center gap-1"
+                            >
+                              <Plus className="w-3 h-3" />
+                              {keyInfo?.configured ? "Update" : "Add Key"}
+                            </button>
+                            {keyInfo?.configured && (
+                              <>
+                                <button
+                                  onClick={() => testApiKey(provider.id)}
+                                  disabled={isTesting}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 rounded text-xs text-white flex items-center gap-1"
+                                  title="Test connection"
+                                >
+                                  {isTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <TestTube className="w-3 h-3" />}
+                                </button>
+                                {keyInfo.source === "user" && (
+                                  <button
+                                    onClick={() => deleteApiKey(provider.id)}
+                                    className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/40 rounded text-xs text-red-300"
+                                    title="Remove key"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Replicate Section */}
+              <div className="p-4 bg-purple-500/5 rounded-lg border border-purple-500/20">
+                <h3 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                  <Cloud className="w-4 h-4 text-purple-400" />
+                  Replicate (Universal Fallback)
+                </h3>
+                <p className="text-xs text-slate-400 mb-3">
+                  Replicate provides access to thousands of AI models with unified billing. 
+                  Configure as a universal fallback for any direct API that fails.
+                </p>
+                {apiKeyData.replicate?.configured ? (
+                  <div className="flex items-center gap-2 text-emerald-400 text-sm">
+                    <Check className="w-4 h-4" />
+                    Configured and ready as fallback
+                  </div>
+                ) : (
+                  <div className="text-amber-400 text-sm">
+                    Add Replicate API key above to enable universal fallback
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Error */}
@@ -389,6 +771,6 @@ export default function AdminModelSettings() {
           </div>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

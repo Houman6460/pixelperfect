@@ -132,3 +132,177 @@ userRoutes.get('/history', authMiddleware(), async (c) => {
     return c.json({ success: false, error: 'Failed to get history' }, 500);
   }
 });
+
+// ==========================================
+// AUTO-REFILL ENDPOINTS
+// ==========================================
+
+// Get auto-refill settings
+userRoutes.get('/auto-refill', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user') as User;
+    
+    const settings = await c.env.DB.prepare(
+      'SELECT * FROM user_auto_refill WHERE user_id = ?'
+    ).bind(user.id).first();
+    
+    // Get available token packages
+    const packages = await c.env.DB.prepare(
+      'SELECT * FROM token_packages WHERE is_active = 1 ORDER BY tokens ASC'
+    ).all();
+    
+    // Get low balance threshold
+    const thresholdSetting = await c.env.DB.prepare(
+      "SELECT value FROM admin_settings WHERE key = 'low_balance_warning_threshold'"
+    ).first<{ value: string }>();
+    
+    return c.json({
+      success: true,
+      data: {
+        settings: settings || {
+          enabled: false,
+          threshold: 10,
+          refill_amount: 100,
+          package_id: null,
+          payment_method: 'card',
+          max_refills_per_month: 5,
+          refills_this_month: 0,
+        },
+        packages: packages.results,
+        lowBalanceThreshold: parseInt(thresholdSetting?.value || '10'),
+        currentBalance: user.tokens,
+        isLowBalance: user.tokens <= parseInt(thresholdSetting?.value || '10'),
+      },
+    });
+  } catch (error) {
+    console.error('Get auto-refill settings error:', error);
+    return c.json({ success: false, error: 'Failed to get auto-refill settings' }, 500);
+  }
+});
+
+// Update auto-refill settings
+userRoutes.put('/auto-refill', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user') as User;
+    const { enabled, threshold, package_id, payment_method, max_refills_per_month } = await c.req.json();
+    
+    // Check if settings exist
+    const existing = await c.env.DB.prepare(
+      'SELECT id FROM user_auto_refill WHERE user_id = ?'
+    ).bind(user.id).first();
+    
+    // Get package tokens if package_id provided
+    let refillAmount = 100;
+    if (package_id) {
+      const pkg = await c.env.DB.prepare(
+        'SELECT tokens FROM token_packages WHERE id = ?'
+      ).bind(package_id).first<{ tokens: number }>();
+      if (pkg) refillAmount = pkg.tokens;
+    }
+    
+    if (existing) {
+      await c.env.DB.prepare(`
+        UPDATE user_auto_refill 
+        SET enabled = ?, threshold = ?, refill_amount = ?, package_id = ?, 
+            payment_method = ?, max_refills_per_month = ?, updated_at = datetime('now')
+        WHERE user_id = ?
+      `).bind(
+        enabled ? 1 : 0,
+        threshold || 10,
+        refillAmount,
+        package_id || null,
+        payment_method || 'card',
+        max_refills_per_month || 5,
+        user.id
+      ).run();
+    } else {
+      const { nanoid } = await import('nanoid');
+      await c.env.DB.prepare(`
+        INSERT INTO user_auto_refill (id, user_id, enabled, threshold, refill_amount, package_id, payment_method, max_refills_per_month)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        `ar_${nanoid(16)}`,
+        user.id,
+        enabled ? 1 : 0,
+        threshold || 10,
+        refillAmount,
+        package_id || null,
+        payment_method || 'card',
+        max_refills_per_month || 5
+      ).run();
+    }
+    
+    return c.json({
+      success: true,
+      message: 'Auto-refill settings updated',
+    });
+  } catch (error) {
+    console.error('Update auto-refill settings error:', error);
+    return c.json({ success: false, error: 'Failed to update auto-refill settings' }, 500);
+  }
+});
+
+// Get auto-refill history
+userRoutes.get('/auto-refill/history', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user') as User;
+    
+    const history = await c.env.DB.prepare(`
+      SELECT * FROM auto_refill_log 
+      WHERE user_id = ? 
+      ORDER BY created_at DESC 
+      LIMIT 20
+    `).bind(user.id).all();
+    
+    return c.json({
+      success: true,
+      data: history.results,
+    });
+  } catch (error) {
+    console.error('Get auto-refill history error:', error);
+    return c.json({ success: false, error: 'Failed to get auto-refill history' }, 500);
+  }
+});
+
+// Manual trigger refill (for testing or manual refill)
+userRoutes.post('/auto-refill/trigger', authMiddleware(), async (c) => {
+  try {
+    const user = c.get('user') as User;
+    
+    // Get user's auto-refill settings
+    const settings = await c.env.DB.prepare(
+      'SELECT * FROM user_auto_refill WHERE user_id = ? AND enabled = 1'
+    ).bind(user.id).first<any>();
+    
+    if (!settings) {
+      return c.json({ success: false, error: 'Auto-refill not enabled' }, 400);
+    }
+    
+    // Check if we've hit the monthly limit
+    if (settings.refills_this_month >= settings.max_refills_per_month) {
+      return c.json({ success: false, error: 'Monthly refill limit reached' }, 400);
+    }
+    
+    // Get the package
+    const pkg = await c.env.DB.prepare(
+      'SELECT * FROM token_packages WHERE id = ?'
+    ).bind(settings.package_id).first<any>();
+    
+    if (!pkg) {
+      return c.json({ success: false, error: 'Token package not found' }, 400);
+    }
+    
+    // For now, redirect to checkout - in production you'd use saved payment method
+    return c.json({
+      success: true,
+      data: {
+        action: 'checkout_required',
+        package: pkg,
+        message: 'Please complete the checkout to add tokens',
+      },
+    });
+  } catch (error) {
+    console.error('Trigger auto-refill error:', error);
+    return c.json({ success: false, error: 'Failed to trigger auto-refill' }, 500);
+  }
+});

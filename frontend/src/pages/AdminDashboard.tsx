@@ -5,10 +5,6 @@ import {
   CreditCard, 
   TrendingUp,
   ArrowUp,
-  ArrowDown,
-  Cpu,
-  Check,
-  AlertCircle,
 } from "lucide-react";
 import { adminApi } from "../lib/api";
 import DashboardLayout from "../components/DashboardLayout";
@@ -22,32 +18,12 @@ interface Analytics {
   recentTransactions: any[];
 }
 
-interface AISettings {
-  aiProvider: "replicate" | "openai" | "gemini";
-  openaiModel: string;
-  geminiModel: string;
-  replicateModel: string;
-  autoSaveToGallery: boolean;
-  defaultUpscaleEnabled: boolean;
-  defaultUpscaleFactor: number;
-}
-
-interface ApiKeys {
-  replicate: string;
-  openai: string;
-  gemini: string;
-}
-
 export default function AdminDashboard() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [aiSettings, setAiSettings] = useState<AISettings | null>(null);
-  const [apiKeys, setApiKeys] = useState<ApiKeys | null>(null);
-  const [savingAI, setSavingAI] = useState(false);
 
   useEffect(() => {
     loadAnalytics();
-    loadAISettings();
   }, []);
 
   const loadAnalytics = async () => {
@@ -58,28 +34,6 @@ export default function AdminDashboard() {
       console.error("Failed to load analytics:", error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadAISettings = async () => {
-    try {
-      const response = await adminApi.getAISettings();
-      setAiSettings(response.data.settings);
-      setApiKeys(response.data.apiKeys);
-    } catch (error) {
-      console.error("Failed to load AI settings:", error);
-    }
-  };
-
-  const updateAIProvider = async (provider: "replicate" | "openai" | "gemini") => {
-    setSavingAI(true);
-    try {
-      const response = await adminApi.updateAISettings({ aiProvider: provider });
-      setAiSettings(response.data.settings);
-    } catch (error) {
-      console.error("Failed to update AI provider:", error);
-    } finally {
-      setSavingAI(false);
     }
   };
 
@@ -156,110 +110,6 @@ export default function AdminDashboard() {
             </p>
             <p className="text-sm text-slate-400">Revenue (30 days)</p>
           </div>
-        </div>
-
-        {/* AI Provider Settings */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-              <Cpu className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-white">AI Image Generation</h2>
-              <p className="text-sm text-slate-400">Choose which AI provider to use for image generation</p>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4">
-            {/* OpenAI */}
-            <button
-              onClick={() => updateAIProvider("openai")}
-              disabled={savingAI || apiKeys?.openai !== "configured"}
-              className={`relative p-4 rounded-xl border-2 transition-all text-left ${
-                aiSettings?.aiProvider === "openai"
-                  ? "border-emerald-500 bg-emerald-500/10"
-                  : apiKeys?.openai === "configured"
-                  ? "border-slate-600 hover:border-slate-500 bg-slate-800/50"
-                  : "border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed"
-              }`}
-            >
-              {aiSettings?.aiProvider === "openai" && (
-                <div className="absolute top-2 right-2">
-                  <Check className="w-5 h-5 text-emerald-400" />
-                </div>
-              )}
-              <div className="font-semibold text-white mb-1">OpenAI</div>
-              <div className="text-xs text-slate-400 mb-2">GPT-Image-1 / DALL-E 3</div>
-              <div className="flex items-center gap-1 text-xs">
-                {apiKeys?.openai === "configured" ? (
-                  <><Check className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400">Configured</span></>
-                ) : (
-                  <><AlertCircle className="w-3 h-3 text-amber-400" /><span className="text-amber-400">Add API Key</span></>
-                )}
-              </div>
-            </button>
-
-            {/* Gemini */}
-            <button
-              onClick={() => updateAIProvider("gemini")}
-              disabled={savingAI || apiKeys?.gemini !== "configured"}
-              className={`relative p-4 rounded-xl border-2 transition-all text-left ${
-                aiSettings?.aiProvider === "gemini"
-                  ? "border-emerald-500 bg-emerald-500/10"
-                  : apiKeys?.gemini === "configured"
-                  ? "border-slate-600 hover:border-slate-500 bg-slate-800/50"
-                  : "border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed"
-              }`}
-            >
-              {aiSettings?.aiProvider === "gemini" && (
-                <div className="absolute top-2 right-2">
-                  <Check className="w-5 h-5 text-emerald-400" />
-                </div>
-              )}
-              <div className="font-semibold text-white mb-1">Google Gemini</div>
-              <div className="text-xs text-slate-400 mb-2">Imagen 3 / Gemini 2.0</div>
-              <div className="flex items-center gap-1 text-xs">
-                {apiKeys?.gemini === "configured" ? (
-                  <><Check className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400">Configured</span></>
-                ) : (
-                  <><AlertCircle className="w-3 h-3 text-amber-400" /><span className="text-amber-400">Add API Key</span></>
-                )}
-              </div>
-            </button>
-
-            {/* Replicate */}
-            <button
-              onClick={() => updateAIProvider("replicate")}
-              disabled={savingAI || apiKeys?.replicate !== "configured"}
-              className={`relative p-4 rounded-xl border-2 transition-all text-left ${
-                aiSettings?.aiProvider === "replicate"
-                  ? "border-emerald-500 bg-emerald-500/10"
-                  : apiKeys?.replicate === "configured"
-                  ? "border-slate-600 hover:border-slate-500 bg-slate-800/50"
-                  : "border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed"
-              }`}
-            >
-              {aiSettings?.aiProvider === "replicate" && (
-                <div className="absolute top-2 right-2">
-                  <Check className="w-5 h-5 text-emerald-400" />
-                </div>
-              )}
-              <div className="font-semibold text-white mb-1">Replicate</div>
-              <div className="text-xs text-slate-400 mb-2">SDXL / InstructPix2Pix</div>
-              <div className="flex items-center gap-1 text-xs">
-                {apiKeys?.replicate === "configured" ? (
-                  <><Check className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400">Configured</span></>
-                ) : (
-                  <><AlertCircle className="w-3 h-3 text-amber-400" /><span className="text-amber-400">Add API Key</span></>
-                )}
-              </div>
-            </button>
-          </div>
-
-          <p className="mt-4 text-xs text-slate-500">
-            Current provider: <span className="text-purple-400 font-medium">{aiSettings?.aiProvider?.toUpperCase() || "Not set"}</span>
-            {savingAI && <span className="ml-2 text-amber-400">Saving...</span>}
-          </p>
         </div>
 
         {/* Subscription Breakdown */}

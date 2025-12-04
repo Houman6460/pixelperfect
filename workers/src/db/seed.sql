@@ -41,15 +41,57 @@ INSERT OR REPLACE INTO token_rules (id, operation, tokens_cost, description) VAL
   ('tr_3d_gen', '3d_generation', 25, 'Generate a 3D model');
 
 -- Default AI Model Configurations
-INSERT OR REPLACE INTO ai_model_configs (id, provider, model_id, display_name, type, tokens_per_use, config) VALUES
-  ('model_dalle3', 'openai', 'dall-e-3', 'DALL-E 3', 'image', 5, '{"size": "1024x1024", "quality": "standard"}'),
-  ('model_sd3', 'stability', 'stable-diffusion-3', 'Stable Diffusion 3', 'image', 4, '{}'),
-  ('model_flux', 'replicate', 'flux-1.1-pro', 'Flux 1.1 Pro', 'image', 6, '{}'),
-  ('model_gpt4o', 'openai', 'gpt-4o', 'GPT-4o', 'text', 2, '{}'),
-  ('model_claude', 'anthropic', 'claude-3-5-sonnet', 'Claude 3.5 Sonnet', 'text', 2, '{}'),
-  ('model_suno', 'suno', 'v3.5', 'Suno v3.5', 'audio', 8, '{}'),
-  ('model_kling', 'kling', 'v1.5', 'Kling v1.5', 'video', 20, '{}'),
-  ('model_meshy', 'meshy', 'meshy-4', 'Meshy-4', '3d', 25, '{}');
+-- Image Models
+INSERT OR REPLACE INTO ai_model_configs (id, provider, model_id, display_name, type, tokens_per_use, config, use_direct_api) VALUES
+  ('model_dalle3', 'openai', 'dall-e-3', 'DALL-E 3', 'image', 5, '{"size": "1024x1024", "quality": "standard"}', 1),
+  ('model_sd3', 'stability', 'stable-diffusion-3', 'Stable Diffusion 3', 'image', 4, '{}', 1),
+  ('model_sdxl', 'stability', 'stable-diffusion-xl', 'Stable Diffusion XL', 'image', 3, '{}', 1),
+  ('model_flux', 'replicate', 'flux-1.1-pro', 'Flux 1.1 Pro', 'image', 6, '{}', 0),
+  ('model_midjourney', 'replicate', 'midjourney', 'Midjourney v6', 'image', 8, '{}', 0),
+  ('model_imagen3', 'google', 'imagen-3', 'Imagen 3', 'image', 5, '{}', 1),
+  ('model_realesrgan', 'replicate', 'real-esrgan', 'Real-ESRGAN (Upscale)', 'image', 2, '{}', 0),
+  ('model_codeformer', 'replicate', 'codeformer', 'CodeFormer (Face Restore)', 'image', 3, '{}', 0);
+
+-- Video Models
+INSERT OR REPLACE INTO ai_model_configs (id, provider, model_id, display_name, type, tokens_per_use, config, use_direct_api) VALUES
+  ('model_kling', 'kling', 'v1.5', 'Kling v1.5', 'video', 20, '{}', 1),
+  ('model_kling2', 'kling', 'v2.0', 'Kling 2.0', 'video', 25, '{}', 1),
+  ('model_runway', 'replicate', 'runway-gen3', 'Runway Gen-3 Alpha', 'video', 30, '{}', 0),
+  ('model_sora', 'openai', 'sora', 'Sora', 'video', 50, '{}', 1),
+  ('model_veo', 'google', 'veo-2', 'Google Veo 2', 'video', 40, '{}', 1),
+  ('model_lumaray', 'replicate', 'luma-ray2', 'Luma Ray 2', 'video', 25, '{}', 0),
+  ('model_minimax', 'replicate', 'minimax-video', 'MiniMax Video', 'video', 20, '{}', 0);
+
+-- Text/LLM Models
+INSERT OR REPLACE INTO ai_model_configs (id, provider, model_id, display_name, type, tokens_per_use, config, use_direct_api) VALUES
+  ('model_gpt4o', 'openai', 'gpt-4o', 'GPT-4o', 'text', 2, '{}', 1),
+  ('model_gpt4turbo', 'openai', 'gpt-4-turbo', 'GPT-4 Turbo', 'text', 3, '{}', 1),
+  ('model_claude', 'anthropic', 'claude-3-5-sonnet', 'Claude 3.5 Sonnet', 'text', 2, '{}', 1),
+  ('model_claude_opus', 'anthropic', 'claude-3-opus', 'Claude 3 Opus', 'text', 4, '{}', 1),
+  ('model_gemini2', 'google', 'gemini-2.0-flash', 'Gemini 2.0 Flash', 'text', 1, '{}', 1),
+  ('model_gemini_pro', 'google', 'gemini-pro', 'Gemini Pro', 'text', 2, '{}', 1),
+  ('model_llama3', 'replicate', 'llama-3.3-70b', 'Llama 3.3 70B', 'text', 1, '{}', 0),
+  ('model_mistral', 'replicate', 'mistral-large', 'Mistral Large', 'text', 2, '{}', 0),
+  ('model_deepseek', 'replicate', 'deepseek-v3', 'DeepSeek V3', 'text', 1, '{}', 0);
+
+-- Music/Audio Models (type 'audio' in DB, shown as 'music' in frontend)
+INSERT OR REPLACE INTO ai_model_configs (id, provider, model_id, display_name, type, tokens_per_use, config, use_direct_api) VALUES
+  ('model_suno', 'suno', 'v4', 'Suno V4', 'audio', 8, '{}', 1),
+  ('model_suno35', 'suno', 'v3.5', 'Suno V3.5', 'audio', 6, '{}', 1),
+  ('model_udio', 'replicate', 'udio', 'Udio', 'audio', 8, '{}', 0),
+  ('model_musicgen', 'replicate', 'musicgen', 'MusicGen', 'audio', 4, '{}', 0),
+  ('model_stable_audio', 'stability', 'stable-audio', 'Stable Audio', 'audio', 5, '{}', 1),
+  ('model_audiocraft', 'replicate', 'audiocraft', 'AudioCraft', 'audio', 4, '{}', 0),
+  ('model_bark', 'replicate', 'bark', 'Bark (Voice)', 'audio', 3, '{}', 0);
+
+-- 3D Models
+INSERT OR REPLACE INTO ai_model_configs (id, provider, model_id, display_name, type, tokens_per_use, config, use_direct_api) VALUES
+  ('model_meshy', 'meshy', 'meshy-4', 'Meshy-4', '3d', 25, '{}', 1),
+  ('model_triposr', 'replicate', 'triposr', 'TripoSR', '3d', 15, '{}', 0),
+  ('model_shap_e', 'replicate', 'shap-e', 'Shap-E', '3d', 10, '{}', 0),
+  ('model_instantmesh', 'replicate', 'instantmesh', 'InstantMesh', '3d', 20, '{}', 0),
+  ('model_luma_genie', 'replicate', 'luma-genie', 'Luma Genie', '3d', 20, '{}', 0),
+  ('model_wonder3d', 'replicate', 'wonder3d', 'Wonder3D', '3d', 15, '{}', 0);
 
 -- Admin settings
 INSERT OR REPLACE INTO admin_settings (key, value, description) VALUES
@@ -61,4 +103,4 @@ INSERT OR REPLACE INTO admin_settings (key, value, description) VALUES
 
 -- Default admin user (password: admin123 - CHANGE IN PRODUCTION)
 INSERT OR REPLACE INTO users (id, email, password_hash, name, role, tokens) VALUES
-  ('user_admin', 'admin@pixelperfect.ai', '$2b$10$rQZ5K1234567890abcdefghijklmnopqrstuvwxyz', 'Admin', 'admin', 999999);
+  ('user_admin', 'admin@pixelperfect.ai', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'Admin', 'admin', 999999);
