@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { Env, User } from '../types';
 import { authMiddleware } from '../middleware/auth';
+import { getApiKey } from '../services/apiKeyManager';
 
 type Variables = {
   user: User;
@@ -30,8 +31,9 @@ promptRoutes.post('/enhance', authMiddleware(), async (c) => {
       }, 402);
     }
     
-    // Check if OPENAI_API_KEY is configured (use GPT for prompt enhancement)
-    if (!c.env.OPENAI_API_KEY) {
+    // Get OpenAI API key from centralized manager
+    const openaiKey = await getApiKey(c.env, 'openai');
+    if (!openaiKey) {
       // Return the original prompt if no API key
       return c.json({ 
         success: true, 
@@ -56,7 +58,7 @@ Keep the enhanced prompt concise but comprehensive. Respond with ONLY the enhanc
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${openaiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { Env, User } from '../types';
 import { authMiddleware } from '../middleware/auth';
+import { getApiKey } from '../services/apiKeyManager';
 
 type Variables = {
   user: User;
@@ -82,12 +83,18 @@ textRoutes.post('/generate', authMiddleware(), async (c) => {
     let response: Response;
     let content: string = '';
     
+    // Get API keys from centralized manager
+    const openaiKey = await getApiKey(c.env, 'openai');
+    const anthropicKey = await getApiKey(c.env, 'anthropic');
+    const googleKey = await getApiKey(c.env, 'google');
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    
     // Route to appropriate API
-    if (apiType === 'openai' && c.env.OPENAI_API_KEY) {
+    if (apiType === 'openai' && openaiKey) {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${c.env.OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${openaiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -102,7 +109,7 @@ textRoutes.post('/generate', authMiddleware(), async (c) => {
         const data = await response.json() as { choices: Array<{ message: { content: string } }> };
         content = data.choices?.[0]?.message?.content || '';
       }
-    } else if (apiType === 'anthropic' && c.env.ANTHROPIC_API_KEY) {
+    } else if (apiType === 'anthropic' && anthropicKey) {
       // Filter system message for Anthropic
       const systemMessage = messages.find((m: { role: string }) => m.role === 'system');
       const userMessages = messages.filter((m: { role: string }) => m.role !== 'system');
@@ -110,7 +117,7 @@ textRoutes.post('/generate', authMiddleware(), async (c) => {
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
-          'x-api-key': c.env.ANTHROPIC_API_KEY,
+          'x-api-key': anthropicKey,
           'Content-Type': 'application/json',
           'anthropic-version': '2023-06-01',
         },
@@ -127,7 +134,7 @@ textRoutes.post('/generate', authMiddleware(), async (c) => {
         const data = await response.json() as { content: Array<{ text: string }> };
         content = data.content?.[0]?.text || '';
       }
-    } else if (apiType === 'google' && c.env.GOOGLE_API_KEY) {
+    } else if (apiType === 'google' && googleKey) {
       // Convert messages to Gemini format
       const contents = messages
         .filter((m: { role: string }) => m.role !== 'system')
@@ -139,7 +146,7 @@ textRoutes.post('/generate', authMiddleware(), async (c) => {
       const systemInstruction = messages.find((m: { role: string }) => m.role === 'system');
       
       response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${c.env.GOOGLE_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -158,7 +165,7 @@ textRoutes.post('/generate', authMiddleware(), async (c) => {
         const data = await response.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
         content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       }
-    } else if (apiType === 'replicate' && c.env.REPLICATE_API_KEY) {
+    } else if (apiType === 'replicate' && replicateKey) {
       // Use Replicate for open-source models
       const prompt = messages.map((m: { role: string; content: string }) => 
         m.role === 'system' ? `System: ${m.content}` :
@@ -169,7 +176,7 @@ textRoutes.post('/generate', authMiddleware(), async (c) => {
       response = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}`,
+          'Authorization': `Bearer ${replicateKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -189,7 +196,7 @@ textRoutes.post('/generate', authMiddleware(), async (c) => {
         for (let i = 0; i < 60; i++) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           const statusResponse = await fetch(prediction.urls.get, {
-            headers: { 'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}` },
+            headers: { 'Authorization': `Bearer ${replicateKey}` },
           });
           const result = await statusResponse.json() as { status: string; output?: string | string[] };
           

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { Env, User } from '../types';
 import { authMiddleware } from '../middleware/auth';
+import { getApiKey } from '../services/apiKeyManager';
 
 type Variables = {
   user: User;
@@ -75,10 +76,11 @@ enhanceRoutes.post('/', authMiddleware(), async (c) => {
       upscaleFactor, tileSize, overlap, prompt, sharpness, denoise, contrast, enhancementPasses, imageType 
     })).run();
     
-    // Check if REPLICATE_API_KEY is configured
-    if (!c.env.REPLICATE_API_KEY) {
+    // Get Replicate API key from centralized manager
+    const replicateKey = await getApiKey(c.env, 'replicate');
+    if (!replicateKey) {
       await updateJobStatus(c.env.DB, jobId, 'failed', null, 'Replicate API key not configured');
-      return c.json({ success: false, error: 'Enhancement service not configured. Please contact admin.' }, 500);
+      return c.json({ success: false, error: 'Enhancement service not configured. Please add Replicate API key in Admin > API Keys.' }, 500);
     }
     
     // Convert image to base64
@@ -89,7 +91,7 @@ enhanceRoutes.post('/', authMiddleware(), async (c) => {
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}`,
+        'Authorization': `Bearer ${replicateKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -117,7 +119,7 @@ enhanceRoutes.post('/', authMiddleware(), async (c) => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const statusResponse = await fetch(prediction.urls.get, {
-        headers: { 'Authorization': `Bearer ${c.env.REPLICATE_API_KEY}` },
+        headers: { 'Authorization': `Bearer ${replicateKey}` },
       });
       
       result = await statusResponse.json() as { status: string; output?: string; error?: string };
