@@ -29,7 +29,24 @@ import {
   X,
   Brain,
   Tag,
+  Save,
+  FolderOpen,
+  Trash2,
+  MoreVertical,
 } from 'lucide-react';
+
+// Saved scenario interface
+interface SavedScenario {
+  id: string;
+  name: string;
+  scenario: string;
+  conceptPrompt: string;
+  targetDuration: number;
+  selectedModelId: string;
+  selectedStyleId: string;
+  customStylePrompt: string;
+  savedAt: string;
+}
 import { ScenarioTagEditor, parseTags, ParsedTag, TAG_CATEGORIES } from './ScenarioTagEditor';
 
 // API Base URL
@@ -159,6 +176,84 @@ export function ScenarioAssistant({
     animation: [],
     cinematic: [],
   });
+
+  // Save/Load scenarios
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
+  const [scenarioName, setScenarioName] = useState('');
+  const [currentScenarioId, setCurrentScenarioId] = useState<string | null>(null);
+
+  // Load saved scenarios from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('saved_scenarios');
+    if (saved) {
+      try {
+        setSavedScenarios(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to load saved scenarios:', e);
+      }
+    }
+  }, []);
+
+  // Save scenarios to localStorage
+  const saveToLocalStorage = (scenarios: SavedScenario[]) => {
+    localStorage.setItem('saved_scenarios', JSON.stringify(scenarios));
+    setSavedScenarios(scenarios);
+  };
+
+  // Save current scenario
+  const handleSaveScenario = () => {
+    if (!scenarioName.trim()) return;
+    
+    const newScenario: SavedScenario = {
+      id: currentScenarioId || `scenario_${Date.now()}`,
+      name: scenarioName.trim(),
+      scenario,
+      conceptPrompt,
+      targetDuration,
+      selectedModelId,
+      selectedStyleId,
+      customStylePrompt,
+      savedAt: new Date().toISOString(),
+    };
+    
+    const existingIndex = savedScenarios.findIndex(s => s.id === newScenario.id);
+    let updated: SavedScenario[];
+    
+    if (existingIndex >= 0) {
+      updated = [...savedScenarios];
+      updated[existingIndex] = newScenario;
+    } else {
+      updated = [newScenario, ...savedScenarios];
+    }
+    
+    saveToLocalStorage(updated);
+    setCurrentScenarioId(newScenario.id);
+    setShowSaveModal(false);
+    setScenarioName('');
+  };
+
+  // Load a saved scenario
+  const handleLoadScenario = (saved: SavedScenario) => {
+    setScenario(saved.scenario);
+    setConceptPrompt(saved.conceptPrompt || '');
+    setTargetDuration(saved.targetDuration);
+    setSelectedModelId(saved.selectedModelId);
+    setSelectedStyleId(saved.selectedStyleId || '');
+    setCustomStylePrompt(saved.customStylePrompt || '');
+    setCurrentScenarioId(saved.id);
+    setShowLoadModal(false);
+  };
+
+  // Delete a saved scenario
+  const handleDeleteScenario = (id: string) => {
+    const updated = savedScenarios.filter(s => s.id !== id);
+    saveToLocalStorage(updated);
+    if (currentScenarioId === id) {
+      setCurrentScenarioId(null);
+    }
+  };
 
   // Get auth token
   const getAuthHeaders = () => {
@@ -418,15 +513,171 @@ export function ScenarioAssistant({
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Header */}
-      <div className="flex items-center gap-3 pb-3 border-b border-slate-700">
-        <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500">
-          <FileText className="w-5 h-5 text-white" />
+      <div className="flex items-center justify-between pb-3 border-b border-slate-700">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500">
+            <FileText className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white">Scenario Assistant</h2>
+            <p className="text-xs text-slate-400">Write your story, let AI handle the rest</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-lg font-semibold text-white">Scenario Assistant</h2>
-          <p className="text-xs text-slate-400">Write your story, let AI handle the rest</p>
+        
+        {/* Save/Load Buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setScenarioName(savedScenarios.find(s => s.id === currentScenarioId)?.name || '');
+              setShowSaveModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-xs text-slate-300 transition"
+            title="Save scenario"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>Save</span>
+          </button>
+          <button
+            onClick={() => setShowLoadModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-xs text-slate-300 transition"
+            title="Load scenario"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>Load</span>
+            {savedScenarios.length > 0 && (
+              <span className="px-1.5 py-0.5 bg-purple-500/30 text-purple-300 rounded text-[10px]">
+                {savedScenarios.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Save Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Save Scenario</h3>
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="p-1 hover:bg-slate-700 rounded-lg transition"
+                title="Close"
+                aria-label="Close save modal"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            
+            <input
+              type="text"
+              value={scenarioName}
+              onChange={(e) => setScenarioName(e.target.value)}
+              placeholder="Enter scenario name..."
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveScenario()}
+            />
+            
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="px-4 py-2 text-sm text-slate-400 hover:text-white transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveScenario}
+                disabled={!scenarioName.trim()}
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white transition"
+              >
+                Save Scenario
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Load Modal */}
+      {showLoadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Load Scenario</h3>
+              <button
+                onClick={() => setShowLoadModal(false)}
+                className="p-1 hover:bg-slate-700 rounded-lg transition"
+                title="Close"
+                aria-label="Close load modal"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            
+            {savedScenarios.length === 0 ? (
+              <div className="py-12 text-center">
+                <FolderOpen className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm">No saved scenarios yet</p>
+                <p className="text-slate-500 text-xs mt-1">Save your first scenario to see it here</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-2">
+                {savedScenarios.map((saved) => (
+                  <div
+                    key={saved.id}
+                    className={`p-4 rounded-lg border transition cursor-pointer ${
+                      currentScenarioId === saved.id
+                        ? 'bg-purple-500/20 border-purple-500/50'
+                        : 'bg-slate-900/50 border-slate-700 hover:border-slate-600'
+                    }`}
+                    onClick={() => handleLoadScenario(saved)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-white truncate">{saved.name}</h4>
+                          {currentScenarioId === saved.id && (
+                            <span className="px-1.5 py-0.5 bg-purple-500/30 text-purple-300 rounded text-[10px]">
+                              Current
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {new Date(saved.savedAt).toLocaleDateString()} at {new Date(saved.savedAt).toLocaleTimeString()}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-2 line-clamp-2">
+                          {saved.scenario.substring(0, 120)}...
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Delete this scenario?')) {
+                            handleDeleteScenario(saved.id);
+                          }
+                        }}
+                        className="p-2 hover:bg-red-500/20 rounded-lg transition ml-2"
+                        title="Delete scenario"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex justify-end mt-4 pt-4 border-t border-slate-700">
+              <button
+                onClick={() => setShowLoadModal(false)}
+                className="px-4 py-2 text-sm text-slate-400 hover:text-white transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Concept Prompt Section - Optional */}
       <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-xl border border-indigo-500/30">
