@@ -4,7 +4,7 @@
 
 export type DialogueSupport = "full" | "limited" | "none";
 export type PromptStyle = "plain" | "cinematic_blocks" | "runway_format";
-export type Provider = "wan" | "kling" | "runway" | "luma" | "minimax" | "pixverse" | "stability" | "custom";
+export type Provider = "wan" | "kling" | "runway" | "luma" | "minimax" | "pixverse" | "stability" | "openai" | "google" | "custom";
 
 export interface ModelCapabilities {
   modelId: string;

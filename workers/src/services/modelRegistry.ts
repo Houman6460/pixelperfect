@@ -160,6 +160,50 @@ const registry: Record<string, ModelCapabilities> = {
     provider: "stability",
     styleTokens: ["animated", "stylized"],
   },
+  
+  // OpenAI Sora Models
+  "sora": {
+    modelId: "sora",
+    displayName: "Sora (OpenAI)",
+    maxDurationSec: 20,
+    maxPromptChars: 1000,
+    supportsDialogue: "full",
+    promptStyle: "cinematic_blocks",
+    provider: "openai",
+    styleTokens: ["cinematic", "ultra-realistic", "photorealistic", "4K", "film-quality", "professional"],
+  },
+  "sora-turbo": {
+    modelId: "sora-turbo",
+    displayName: "Sora Turbo (Fast)",
+    maxDurationSec: 10,
+    maxPromptChars: 500,
+    supportsDialogue: "full",
+    promptStyle: "cinematic_blocks",
+    provider: "openai",
+    styleTokens: ["cinematic", "realistic", "high-quality"],
+  },
+  
+  // Google Veo Models
+  "veo-2": {
+    modelId: "veo-2",
+    displayName: "Veo 2 (Google)",
+    maxDurationSec: 10,
+    maxPromptChars: 800,
+    supportsDialogue: "full",
+    promptStyle: "cinematic_blocks",
+    provider: "google",
+    styleTokens: ["cinematic", "photorealistic", "4K", "film-quality", "professional"],
+  },
+  "veo-2-flash": {
+    modelId: "veo-2-flash",
+    displayName: "Veo 2 Flash",
+    maxDurationSec: 6,
+    maxPromptChars: 400,
+    supportsDialogue: "limited",
+    promptStyle: "plain",
+    provider: "google",
+    styleTokens: ["cinematic", "realistic", "fast"],
+  },
 };
 
 // Default capabilities for unknown models
