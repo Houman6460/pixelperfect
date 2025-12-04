@@ -3,7 +3,7 @@
  * Full scenario editing with AI improvement and timeline generation
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
   FileText,
@@ -25,6 +25,9 @@ import {
   RefreshCw,
   Layers,
   Settings,
+  ImagePlus,
+  X,
+  Brain,
 } from 'lucide-react';
 
 // API Base URL
@@ -89,6 +92,22 @@ interface Model {
   recommended_for_scenario: boolean;
 }
 
+interface StoryboardImage {
+  id: string;
+  file: File;
+  preview: string;
+  caption?: string;
+}
+
+// Vision-capable AI models for scenario analysis
+const VISION_AI_MODELS = [
+  { id: 'gpt-4o', name: 'GPT-4o (OpenAI)', provider: 'openai', description: 'Best for detailed analysis' },
+  { id: 'gpt-4o-mini', name: 'GPT-4o Mini (OpenAI)', provider: 'openai', description: 'Fast & cost-effective' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Google)', provider: 'google', description: 'Great for visual stories' },
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Google)', provider: 'google', description: 'Fast processing' },
+  { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet (Anthropic)', provider: 'anthropic', description: 'Creative storytelling' },
+];
+
 export function ScenarioAssistant({
   onTimelineGenerated,
   initialScenario = '',
@@ -111,6 +130,11 @@ export function ScenarioAssistant({
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [improvementSuccess, setImprovementSuccess] = useState(false);
+  
+  // Storyboard images
+  const [storyboardImages, setStoryboardImages] = useState<StoryboardImage[]>([]);
+  const [visionModelId, setVisionModelId] = useState('gpt-4o');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get auth token
   const getAuthHeaders = () => {
@@ -136,21 +160,79 @@ export function ScenarioAssistant({
     fetchModels();
   }, []);
 
+  // Handle storyboard image upload
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    const newImages: StoryboardImage[] = [];
+    Array.from(files).forEach((file) => {
+      if (file.type.startsWith('image/')) {
+        const id = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        newImages.push({
+          id,
+          file,
+          preview: URL.createObjectURL(file),
+        });
+      }
+    });
+    
+    setStoryboardImages(prev => [...prev, ...newImages]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+  
+  // Remove storyboard image
+  const removeImage = (id: string) => {
+    setStoryboardImages(prev => {
+      const img = prev.find(i => i.id === id);
+      if (img) URL.revokeObjectURL(img.preview);
+      return prev.filter(i => i.id !== id);
+    });
+  };
+  
+  // Update image caption
+  const updateImageCaption = (id: string, caption: string) => {
+    setStoryboardImages(prev => 
+      prev.map(img => img.id === id ? { ...img, caption } : img)
+    );
+  };
+  
+  // Convert images to base64 for API
+  const imagesToBase64 = async (): Promise<{ data: string; caption?: string }[]> => {
+    const results: { data: string; caption?: string }[] = [];
+    for (const img of storyboardImages) {
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(img.file);
+      });
+      results.push({ data: base64, caption: img.caption });
+    }
+    return results;
+  };
+
   // Improve scenario
   const handleImproveScenario = async () => {
-    if (!scenario.trim() || isImproving) return;
+    if (!scenario.trim() && storyboardImages.length === 0) return;
+    if (isImproving) return;
 
     setIsImproving(true);
     setError(null);
     setWarnings([]);
 
     try {
+      // Convert images to base64 if any
+      const images = storyboardImages.length > 0 ? await imagesToBase64() : undefined;
+      
       const response = await axios.post(
         `${API_BASE}/api/v1/scenario/improve`,
         {
           scenario_text: scenario,
           target_duration_sec: targetDuration,
           target_model_id: selectedModelId,
+          // Vision AI settings
+          vision_model_id: storyboardImages.length > 0 ? visionModelId : undefined,
+          storyboard_images: images,
           style_hints: {
             genre: 'cinematic',
             mood: 'compelling',
@@ -276,6 +358,99 @@ The traveler walks through the quiet streets...`}
           <div className="flex items-center gap-2 mt-2 text-xs text-green-400">
             <Check className="w-3 h-3" />
             Scenario improved successfully
+          </div>
+        )}
+      </div>
+
+      {/* Storyboard Upload Section */}
+      <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/50 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ImagePlus className="w-4 h-4 text-purple-400" />
+            <span className="text-sm font-medium text-slate-300">Storyboard Images</span>
+            <span className="text-xs text-slate-500">(optional)</span>
+          </div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-lg text-xs hover:bg-purple-500/30 transition"
+          >
+            <ImagePlus className="w-3.5 h-3.5" />
+            Add Images
+          </button>
+        </div>
+        
+        <p className="text-xs text-slate-500">
+          Upload storyboard sketches, reference images, or visual concepts. AI will analyze them along with your text.
+        </p>
+        
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handleImageUpload}
+          className="hidden"
+          aria-label="Upload storyboard images"
+        />
+        
+        {/* Uploaded images grid */}
+        {storyboardImages.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {storyboardImages.map((img, index) => (
+              <div key={img.id} className="relative group">
+                <div className="aspect-video rounded-lg overflow-hidden bg-slate-900 border border-slate-700">
+                  <img
+                    src={img.preview}
+                    alt={`Storyboard ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-white">
+                    #{index + 1}
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeImage(img.id)}
+                  className="absolute top-1 right-1 p-1 bg-red-500/80 rounded-full opacity-0 group-hover:opacity-100 transition"
+                  aria-label="Remove image"
+                >
+                  <X className="w-3 h-3 text-white" />
+                </button>
+                <input
+                  type="text"
+                  value={img.caption || ''}
+                  onChange={(e) => updateImageCaption(img.id, e.target.value)}
+                  placeholder="Caption (optional)"
+                  className="w-full mt-1 px-2 py-1 bg-slate-900/50 border border-slate-700 rounded text-xs text-white placeholder-slate-500"
+                  aria-label={`Caption for image ${index + 1}`}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {/* Vision AI Model Selection - only show when images uploaded */}
+        {storyboardImages.length > 0 && (
+          <div className="pt-3 border-t border-slate-700/50">
+            <label className="text-sm font-medium text-slate-300 mb-2 block">
+              <Brain className="w-4 h-4 inline mr-2" />
+              Vision AI Model
+            </label>
+            <select
+              value={visionModelId}
+              onChange={(e) => setVisionModelId(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              aria-label="Select vision AI model"
+            >
+              {VISION_AI_MODELS.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name} - {model.description}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              This AI will analyze your storyboard images and incorporate visual details into the scenario.
+            </p>
           </div>
         )}
       </div>
